@@ -1,0 +1,3 @@
+/home/ricepaper/raylib/src/Game/build/CMakeFiles/shadow_echo.dir
+/home/ricepaper/raylib/src/Game/build/CMakeFiles/edit_cache.dir
+/home/ricepaper/raylib/src/Game/build/CMakeFiles/rebuild_cache.dir

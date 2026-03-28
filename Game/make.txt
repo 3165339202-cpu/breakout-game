@@ -1,0 +1,15 @@
+cd ~/src/Game/build
+make
+export LD_LIBRARY_PATH=../raylib-5.0_linux_amd64/lib:$LD_LIBRARY_PATH
+./shadow_echo
+
+
+cd ~/src/Game/build
+cmake ..
+make
+export LD_LIBRARY_PATH=../raylib-5.0_linux_amd64/lib:$LD_LIBRARY_PATH  # 如果使用预编译包
+./shadow_echo
+
+
+export DISPLAY=:0
+./shadow_echo

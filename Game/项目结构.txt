@@ -1,0 +1,30 @@
+game/
+├── CMakeLists.txt
+├── include/
+│   ├── Common.h
+│   ├── M01_Core.h
+│   ├── M02_Input.h
+│   └── ... (其余头文件)
+└── src/
+    ├── main.cpp
+    ├── M01_Core.cpp
+    ├── M02_Input.cpp
+    ├── M03_Physics.cpp
+    ├── M04_PlayerState.cpp
+    ├── M05_ShadowRecorder.cpp
+    ├── M06_ShadowEntity.cpp
+    ├── M07_MechanicLogic.cpp
+    ├── M08_MechanicRender.cpp
+    ├── M09_EnemyAI.cpp
+    ├── M10_LevelLoader.cpp
+    ├── M11_RenderBasic.cpp
+    ├── M12_Animation.cpp
+    ├── M13_Camera.cpp
+    ├── M14_UI.cpp
+    └── M15_Audio.cpp
+
+
+export LD_LIBRARY_PATH=../raylib-5.0_linux_amd64/lib:$LD_LIBRARY_PATH
+./shadow_echo
+
+
