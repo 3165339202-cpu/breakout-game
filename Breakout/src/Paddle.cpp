@@ -1,21 +1,28 @@
 #include "Paddle.h"
 
-Paddle::Paddle(float x, float y, float width, float height) {
-    rect = { x, y, width, height };
-    screenWidth = 800;
+Paddle::Paddle(float x, float y, float w, float h)
+    : GameObject({x, y}),
+      PhysicalObject({x, y}, {0, 0}, 0),
+      VisualObject({x, y}, WHITE, true)
+{
+    width = w;
+    height = h;
+    screenWidth = 800; // 你原来的窗口宽度
 }
 
 void Paddle::MoveLeft(float speed) {
-    rect.x -= speed;
-    if (rect.x < 5) rect.x = 5;
+    position.x -= speed;
+    if (position.x < 5) position.x = 5;
 }
 
 void Paddle::MoveRight(float speed) {
-    rect.x += speed;
-    if (rect.x + rect.width > screenWidth - 5) rect.x = screenWidth - rect.width - 5;
+    position.x += speed;
+    if (position.x + width > screenWidth - 5)
+        position.x = screenWidth - width - 5;
 }
 
 void Paddle::Draw() {
-    DrawRectangleRec(rect, BLUE);
-    DrawRectangleLinesEx(rect, 2, SKYBLUE);
+    if (visible) {
+        DrawRectangle(position.x, position.y, width, height, color);
+    }
 }

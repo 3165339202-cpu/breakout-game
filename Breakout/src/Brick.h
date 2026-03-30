@@ -2,23 +2,23 @@
 #define BRICK_H
 
 #include "raylib.h"
+#include "GameObject.h"   // ⭐ 新加
 
-// ⭐ 新增：砖块类型
+// ⭐ 砖块类型
 enum BrickType {
     NORMAL,
     EXPLOSIVE,
     GOLDEN
 };
 
-class Brick {
+class Brick : public VisualObject {   // ⭐ 继承！
 private:
     Rectangle rect;
     bool active;
-    Color color;
-    BrickType type;   // ⭐ 新增
+    BrickType type;
 
 public:
-    // ⭐ 修改构造函数（多一个参数，默认普通砖）
+    // ⭐ 构造函数
     Brick(float x, float y, float width, float height, Color c, BrickType t = NORMAL);
 
     void Draw();
@@ -27,7 +27,7 @@ public:
     void SetActive(bool a) { active = a; }
     Rectangle GetRect() { return rect; }
 
-    BrickType GetType() { return type; }   // ⭐ 新增
+    BrickType GetType() { return type; }
 };
 
 #endif

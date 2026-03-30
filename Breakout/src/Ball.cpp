@@ -6,7 +6,7 @@
 
 Ball::Ball(Vector2 pos, Vector2 sp, float r) {
     position = pos;
-    speed = sp;
+    velocity = sp;
     radius = r;
     gravity = 0.08f;
     maxSpeed = 15.0f;
@@ -23,8 +23,8 @@ Ball::Ball(Vector2 pos, Vector2 sp, float r) {
 
 void Ball::Move() {
     if (!launched) return;
-    position.x += speed.x;
-    position.y += speed.y;
+    position.x += velocity.x;
+    position.y += velocity.y;
 }
 
 void Ball::Draw() {
@@ -32,7 +32,7 @@ void Ball::Draw() {
     DrawCircleV(position, radius, RED);
     
     if (launched) {
-        Vector2 endPos = { position.x + speed.x * 2, position.y + speed.y * 2 };
+        Vector2 endPos = { position.x + velocity.x * 2, position.y + velocity.y * 2 };
         DrawLineEx(position, endPos, 2, YELLOW);
     } else {
         if ((int)(GetTime() * 2) % 2 == 0) {
@@ -51,8 +51,8 @@ void Ball::Launch(float paddleX, float paddleWidth) {
     float speedVariation = (rand() % 5 - 2) * 0.5f;
     float launchSpeed = baseSpeed + speedVariation;
     
-    speed.x = launchSpeed * std::cos(angle);
-    speed.y = -launchSpeed * std::abs(std::sin(angle));
+    velocity.x = launchSpeed * std::cos(angle);
+    velocity.y = -launchSpeed * std::abs(std::sin(angle));
     
     launched = true;
     position.x = paddleX;
@@ -62,27 +62,27 @@ void Ball::Launch(float paddleX, float paddleWidth) {
 void Ball::ResetToPaddle(float paddleX, float paddleY) {
     position.x = paddleX;
     position.y = paddleY - radius - 5;
-    speed = {0, 0};
+    velocity = {0, 0};
     launched = false;
 }
 
 void Ball::Reset(Vector2 pos, Vector2 sp) {
     position = pos;
-    speed = sp;
+    velocity = sp;
 }
 
 void Ball::AddBounceForce(float force) {
-    speed.y -= force;
+    velocity.y -= force;
 }
 
 void Ball::ApplyGravity() {
     if (!launched) return;
-    speed.y += gravity;
+    velocity.y += gravity;
     
-    float currentSpeed = std::sqrt(speed.x * speed.x + speed.y * speed.y);
+    float currentSpeed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
     if (currentSpeed > maxSpeed) {
-        speed.x = (speed.x / currentSpeed) * maxSpeed;
-        speed.y = (speed.y / currentSpeed) * maxSpeed;
+        velocity.x = (velocity.x / currentSpeed) * maxSpeed;
+        velocity.y = (velocity.y / currentSpeed) * maxSpeed;
     }
 }
 
@@ -91,39 +91,39 @@ void Ball::BounceEdge(int screenWidth, int screenHeight) {
     
     if (position.x - radius <= 5) {
         position.x = radius + 5;
-        speed.x = std::abs(speed.x);
+        velocity.x = std::abs(velocity.x);
     }
     if (position.x + radius >= screenWidth - 5) {
         position.x = screenWidth - radius - 5;
-        speed.x = -std::abs(speed.x);
+        velocity.x = -std::abs(velocity.x);
     }
     if (position.y - radius <= 5) {
         position.y = radius + 5;
-        speed.y = std::abs(speed.y);
-        speed.y += bounceForce;
+        velocity.y = std::abs(velocity.y);
+        velocity.y += bounceForce;
     }
 }
 
 void Ball::BouncePaddle(Rectangle paddleRect) {
     if (!launched) return;
-    if (speed.y <= 0) return;
+    if (velocity.y <= 0) return;
     
     if (position.y + radius >= paddleRect.y &&
-        position.y + radius <= paddleRect.y + paddleRect.height + std::abs(speed.y) &&
+        position.y + radius <= paddleRect.y + paddleRect.height + std::abs(velocity.y) &&
         position.x >= paddleRect.x - radius &&
         position.x <= paddleRect.x + paddleRect.width + radius) {
         
         float hitPoint = (position.x - (paddleRect.x + paddleRect.width / 2.0f)) / (paddleRect.width / 2.0f);
         hitPoint = std::clamp(hitPoint, -1.0f, 1.0f);
         
-        float speedMagnitude = std::sqrt(speed.x * speed.x + speed.y * speed.y);
+        float speedMagnitude = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
         speedMagnitude = std::max(speedMagnitude + bounceForce * 2, 7.0f);
         
         float angle = 90.0f - hitPoint * 50.0f;
         float angleRad = angle * 3.14159f / 180.0f;
         
-        speed.x = speedMagnitude * std::cos(angleRad);
-        speed.y = -speedMagnitude * std::abs(std::sin(angleRad));
+        velocity.x = speedMagnitude * std::cos(angleRad);
+        velocity.y = -speedMagnitude * std::abs(std::sin(angleRad));
         position.y = paddleRect.y - radius;
     }
 }
@@ -148,11 +148,11 @@ bool Ball::CheckBrickCollision(Rectangle brickRect) {
         float minDistY = std::min(distTop, distBottom);
         
         if (minDistX < minDistY) {
-            speed.x *= -1;
+            velocity.x *= -1;
             position.x = (distLeft < distRight) ? brickRect.x - radius : brickRect.x + brickRect.width + radius;
         } else {
-            speed.y *= -1;
-            if (distTop > distBottom) speed.y -= bounceForce;
+            velocity.y *= -1;
+            if (distTop > distBottom) velocity.y -= bounceForce;
             position.y = (distTop < distBottom) ? brickRect.y - radius : brickRect.y + brickRect.height + radius;
         }
         return true;
