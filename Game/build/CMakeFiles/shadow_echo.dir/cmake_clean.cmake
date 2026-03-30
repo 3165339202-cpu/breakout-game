@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/shadow_echo.dir/src/M01_Core.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M01_Core.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M02_Input.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M02_Input.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M03_Physics.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M03_Physics.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M04_PlayerState.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M04_PlayerState.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M05_ShadowRecorder.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M05_ShadowRecorder.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M06_ShadowEntity.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M06_ShadowEntity.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M07_MechanicLogic.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M07_MechanicLogic.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M08_MechanicRender.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M08_MechanicRender.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M09_EnemyAI.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M09_EnemyAI.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M10_LevelLoader.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M10_LevelLoader.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M11_RenderBasic.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M11_RenderBasic.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M12_Animation.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M12_Animation.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M13_Camera.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M13_Camera.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M14_UI.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M14_UI.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/M15_Audio.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/M15_Audio.cpp.o.d"
+  "CMakeFiles/shadow_echo.dir/src/main.cpp.o"
+  "CMakeFiles/shadow_echo.dir/src/main.cpp.o.d"
+  "shadow_echo"
+  "shadow_echo.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/shadow_echo.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

@@ -1,0 +1,3 @@
+/home/ricepaper/raylib/src/Breakout/build/CMakeFiles/breakout_week2.dir
+/home/ricepaper/raylib/src/Breakout/build/CMakeFiles/edit_cache.dir
+/home/ricepaper/raylib/src/Breakout/build/CMakeFiles/rebuild_cache.dir
