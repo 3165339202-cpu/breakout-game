@@ -1,7 +1,6 @@
 #pragma once
 #include "raylib.h"
 
-// 基类
 class GameObject {
 public:
     Vector2 position;
@@ -11,7 +10,6 @@ public:
     }
 };
 
-// 物理类
 class PhysicalObject : virtual public GameObject {
 public:
     Vector2 velocity;
@@ -24,7 +22,7 @@ public:
     }
 };
 
-// 渲染类
+
 class VisualObject : virtual public GameObject {
 public:
     Color color;

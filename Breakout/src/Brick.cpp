@@ -7,6 +7,10 @@ Brick::Brick(float x, float y, float width, float height, Color c, BrickType t)
     rect = { x, y, width, height };
     active = true;
     type = t;
+    
+    if (t == GOLDEN) scoreValue = 50;
+    else if (t == EXPLOSIVE) scoreValue = 10;
+    else scoreValue = 10;
 }
 
 void Brick::Draw() {

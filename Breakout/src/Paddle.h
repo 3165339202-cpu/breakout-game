@@ -2,7 +2,7 @@
 #define PADDLE_H
 
 #include "raylib.h"
-#include "GameObject.h"   // ⭐ 新加
+#include "GameObject.h"
 
 class Paddle : public PhysicalObject, public VisualObject {
 private:

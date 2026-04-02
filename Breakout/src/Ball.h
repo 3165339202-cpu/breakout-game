@@ -2,7 +2,7 @@
 #define BALL_H
 
 #include "raylib.h"
-#include "GameObject.h"   // ⭐ 新加
+#include "GameObject.h"
 
 class Ball : public PhysicalObject, public VisualObject {
 private:
@@ -27,7 +27,6 @@ public:
     void Reset(Vector2 pos, Vector2 sp);
     void AddBounceForce(float force);
 
-    // ⭐ 兼容你原来的代码（很重要！）
     Vector2 GetPosition() { return position; }
     float GetRadius() { return radius; }
     Vector2 GetSpeed() { return velocity; }
@@ -36,4 +35,4 @@ public:
     bool IsLaunched() { return launched; }
 };
 
-#endif
+#endif;

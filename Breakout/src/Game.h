@@ -5,6 +5,16 @@
 #include "Brick.h"
 #include <vector>
 
+// ⭐ 状态机
+enum class GameState {
+    MENU,
+    PLAYING,
+    PAUSED,
+    GAMEOVER,
+    VICTORY,
+    LEADERBOARD
+};
+
 class Game {
 private:
     Ball ball;
@@ -15,13 +25,12 @@ private:
     int lives;
     int winCount;
 
-    bool gameOver;
-    bool paused;
-
     float gameTime;
 
 public:
     Game();
+
+    GameState currentState;   // ⭐ 核心变量
 
     void Init();
     void Update();
