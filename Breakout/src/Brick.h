@@ -26,7 +26,7 @@ public:
     bool IsActive() { return active; }
     void SetActive(bool a) { active = a; }
     Rectangle GetRect() { return rect; }
-
+    Color GetColor() const { return color; }
     BrickType GetType() { return type; }
     int GetScoreValue() { return scoreValue; }
 };

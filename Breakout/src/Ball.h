@@ -21,6 +21,7 @@ public:
     void BounceEdge(int screenWidth, int screenHeight);
     void BouncePaddle(Rectangle paddleRect);
     bool CheckBrickCollision(Rectangle brickRect);
+    void SetLaunched(bool l) { launched = l; }
 
     void Launch(float paddleX, float paddleWidth);
     void ResetToPaddle(float paddleX, float paddleY);
@@ -35,4 +36,4 @@ public:
     bool IsLaunched() { return launched; }
 };
 
-#endif;
+#endif

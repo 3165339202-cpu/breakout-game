@@ -26,3 +26,20 @@ void Paddle::Draw() {
         DrawRectangle(position.x, position.y, width, height, color);
     }
 }
+void Paddle::Extend(float extraWidth, float duration) {
+    // 如果当前没有延长效果，记录原始宽度
+    if (effectTimer <= 0) {
+        originalWidth = width;
+    }
+    width = originalWidth + extraWidth;
+    effectTimer = duration;
+}
+
+void Paddle::Update(float dt) {
+    if (effectTimer > 0) {
+        effectTimer -= dt;
+        if (effectTimer <= 0) {
+            width = originalWidth;   // 恢复原始宽度
+        }
+    }
+}

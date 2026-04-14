@@ -9,6 +9,8 @@ private:
     float width;
     float height;
     float screenWidth;
+    float originalWidth;
+    float effectTimer;
 
 public:
     Paddle(float x, float y, float w, float h);
@@ -16,6 +18,8 @@ public:
     void MoveLeft(float speed);
     void MoveRight(float speed);
     void Draw();
+    void Extend(float extraWidth, float duration);
+    void Update(float dt); 
 
     Rectangle GetRect() {
         return { position.x, position.y, width, height };
