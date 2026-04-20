@@ -3,7 +3,8 @@ project(Breakout)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(${CMAKE_SOURCE_DIR}/../src)
+include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/../build/include)
 link_directories(${CMAKE_SOURCE_DIR}/../build)
 
 add_executable(breakout_week2 
