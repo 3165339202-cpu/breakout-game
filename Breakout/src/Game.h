@@ -11,6 +11,8 @@
 #include "Leaderboard.h"
 #include "Particle.h"
 #include "json.hpp"
+#include "NetworkSession.h"
+#include <string>
 
 
 // ⭐ 状态机
@@ -21,6 +23,12 @@ enum class GameState {
     GAMEOVER,
     VICTORY,
     LEADERBOARD
+};
+
+enum class NetworkRole {
+    OFFLINE,
+    HOST,
+    CLIENT
 };
 
             // 加载的配置          
@@ -46,6 +54,16 @@ private:
     float gameTime;
     Leaderboard leaderboard;
 
+    NetworkSession networkSession;
+    NetworkRole networkRole;
+    bool remoteMoveLeft;
+    bool remoteMoveRight;
+    std::string networkHint;
+
+
+    std::string BuildNetworkState() const;
+    void ApplyNetworkState(const std::string& state);
+
 public:
     Game();
 
@@ -70,4 +88,5 @@ public:
     void Update();
     void Draw();
     void Shutdown(){};
+    const std::string& GetNetworkHint() const { return networkHint; }
 };
