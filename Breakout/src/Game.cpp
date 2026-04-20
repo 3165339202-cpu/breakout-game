@@ -54,7 +54,8 @@ void Game::Init() {
         for (const char* path : fontCandidates) {
             if (FileExists(path)) {
                 const char* menuCharset =
-                    "打砖块游戏按 空格 键开始单机创建局域网房间加入房主方向客户端查看排行榜已连接位端口等待失败回退模式";
+                    "打砖块游戏按 空格 键开始单机创建局域网房间加入房主方向客户端查看排行榜已连接位端口等待失败回退模式"
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.:/+()- ";
                 int glyphCount = 0;
                 int* codepoints = LoadCodepoints(menuCharset, &glyphCount);
                 gUiFont = LoadFontEx(path, 32, codepoints, glyphCount);
