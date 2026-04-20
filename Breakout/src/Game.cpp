@@ -12,15 +12,18 @@
 #include "SlowBallEffect.h"
 using json = nlohmann::json;
 
+namespace {
+Font gUiFont{};
+bool gHasChineseFont = false;
+}
+
 Game::Game()
     : paddle(340, 550, 120, 15),
       leaderboard("scores.txt"),
       networkRole(NetworkRole::OFFLINE),
       remoteMoveLeft(false),
       remoteMoveRight(false),
-      networkHint("单机模式"),
-      uiFont{},
-      hasChineseFont(false) {}
+      networkHint("单机模式") {}
 
 void Game::Init() {
     std::ifstream configFile("config.json");
@@ -42,7 +45,7 @@ void Game::Init() {
     remoteMoveLeft = false;
     remoteMoveRight = false;
 
-    if (!hasChineseFont) {
+    if (!gHasChineseFont) {
         const char* fontCandidates[] = {
             "fonts/NotoSansSC.otf",
             "../fonts/NotoSansSC.otf",
@@ -54,12 +57,12 @@ void Game::Init() {
                     "打砖块游戏按 空格 键开始单机创建局域网房间加入房主方向客户端查看排行榜已连接位端口等待失败回退模式";
                 int glyphCount = 0;
                 int* codepoints = LoadCodepoints(menuCharset, &glyphCount);
-                uiFont = LoadFontEx(path, 32, codepoints, glyphCount);
+                gUiFont = LoadFontEx(path, 32, codepoints, glyphCount);
                 if (codepoints != nullptr) {
                     UnloadCodepoints(codepoints);
                 }
-                if (uiFont.texture.id > 0) {
-                    hasChineseFont = true;
+                if (gUiFont.texture.id > 0) {
+                    gHasChineseFont = true;
                     break;
                 }
             }
@@ -386,26 +389,19 @@ void Game::Update() {
 }
 
 
-void Game::Shutdown() {
-    if (hasChineseFont && uiFont.texture.id > 0) {
-        UnloadFont(uiFont);
-    }
-    hasChineseFont = false;
-}
-
 void Game::Draw() {
     BeginDrawing();
     ClearBackground(BLACK);
 
     switch (currentState) {
     case GameState::MENU:
-        if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 200}, 44, 1, WHITE);
-            DrawTextEx(uiFont, "按 空格 键开始单机游戏", Vector2{190, 285}, 28, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 325}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 365}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "房主: 方向键+空格  客户端: A/D", Vector2{145, 405}, 24, 1, LIGHTGRAY);
-            DrawTextEx(uiFont, "按 L 键查看排行榜", Vector2{230, 445}, 28, 1, YELLOW);
+        if (gHasChineseFont) {
+            DrawTextEx(gUiFont, "打砖块游戏", Vector2{280, 200}, 44, 1, WHITE);
+            DrawTextEx(gUiFont, "按 空格 键开始单机游戏", Vector2{190, 285}, 28, 1, GREEN);
+            DrawTextEx(gUiFont, "按 H 键创建局域网房间", Vector2{185, 325}, 28, 1, SKYBLUE);
+            DrawTextEx(gUiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 365}, 28, 1, SKYBLUE);
+            DrawTextEx(gUiFont, "房主: 方向键+空格  客户端: A/D", Vector2{145, 405}, 24, 1, LIGHTGRAY);
+            DrawTextEx(gUiFont, "按 L 键查看排行榜", Vector2{230, 445}, 28, 1, YELLOW);
         } else {
             DrawText("BREAKOUT GAME", 260, 200, 30, WHITE);
             DrawText("Press SPACE to Start (Offline)", 210, 290, 20, GREEN);
@@ -425,8 +421,8 @@ void Game::Draw() {
 
         DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
-        if (hasChineseFont) {
-            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
+        if (gHasChineseFont) {
+            DrawTextEx(gUiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
         } else {
             DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
         }

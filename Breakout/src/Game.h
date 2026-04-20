@@ -60,8 +60,6 @@ private:
     bool remoteMoveRight;
     std::string networkHint;
 
-    Font uiFont;
-    bool hasChineseFont;
 
     std::string BuildNetworkState() const;
     void ApplyNetworkState(const std::string& state);
@@ -89,6 +87,6 @@ public:
     void Init();
     void Update();
     void Draw();
-    void Shutdown();
+    void Shutdown(){};
     const std::string& GetNetworkHint() const { return networkHint; }
 };
