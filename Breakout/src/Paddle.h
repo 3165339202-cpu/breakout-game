@@ -1,18 +1,29 @@
 #ifndef PADDLE_H
 #define PADDLE_H
-#include "raylib.h"
 
-class Paddle {
+#include "raylib.h"
+#include "GameObject.h"
+
+class Paddle : public PhysicalObject, public VisualObject {
 private:
-    Rectangle rect;
+    float width;
+    float height;
     float screenWidth;
+    float originalWidth;
+    float effectTimer;
 
 public:
-    Paddle(float x, float y, float width, float height);
+    Paddle(float x, float y, float w, float h);
+
     void MoveLeft(float speed);
     void MoveRight(float speed);
     void Draw();
-    Rectangle GetRect() { return rect; }
+    void Extend(float extraWidth, float duration);
+    void Update(float dt); 
+
+    Rectangle GetRect() {
+        return { position.x, position.y, width, height };
+    }
 };
 
 #endif

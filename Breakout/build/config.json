@@ -1,0 +1,19 @@
+{
+    "powerups": {
+        "paddle_extend": {
+            "extra_width": 40,
+            "duration": 5.0,
+            "drop_rate": 0.3
+        },
+        "multi_ball": {
+            "extra_balls": 2,
+            "duration": 0.0,
+            "drop_rate": 0.2
+        },
+        "slow_ball": {
+            "speed_factor": 0.7,
+            "duration": 5.0,
+            "drop_rate": 0.25
+        }
+    }
+}

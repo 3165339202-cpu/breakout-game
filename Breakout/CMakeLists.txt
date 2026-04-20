@@ -11,6 +11,12 @@ add_executable(breakout_week2
     src/Ball.cpp 
     src/Paddle.cpp 
     src/Brick.cpp
+    src/Game.cpp
+    src/ExtendPaddleEffect.cpp
+    src/MultiBallEffect.cpp
+    src/SlowBallEffect.cpp
+    src/PowerUpFactory.cpp  
+    src/PowerUp.cpp
 )
 
 target_link_libraries(breakout_week2 raylib m pthread dl rt X11)
