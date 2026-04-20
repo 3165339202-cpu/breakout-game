@@ -7,6 +7,8 @@ Paddle::Paddle(float x, float y, float w, float h)
 {
     width = w;
     height = h;
+    originalWidth = w;
+    effectTimer = 0.0f;
     screenWidth = 800; // 你原来的窗口宽度
 }
 
