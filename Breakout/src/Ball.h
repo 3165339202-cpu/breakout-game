@@ -28,12 +28,12 @@ public:
     void Reset(Vector2 pos, Vector2 sp);
     void AddBounceForce(float force);
 
-    Vector2 GetPosition() { return position; }
-    float GetRadius() { return radius; }
-    Vector2 GetSpeed() { return velocity; }
+    Vector2 GetPosition() const { return position; }
+    float GetRadius() const { return radius; }
+    Vector2 GetSpeed() const { return velocity; }
 
     void SetSpeed(Vector2 sp) { velocity = sp; }
-    bool IsLaunched() { return launched; }
+    bool IsLaunched() const { return launched; }
 };
 
 #endif
