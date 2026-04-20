@@ -50,7 +50,14 @@ void Game::Init() {
         };
         for (const char* path : fontCandidates) {
             if (FileExists(path)) {
-                uiFont = LoadFontEx(path, 32, nullptr, 0);
+                const char* menuCharset =
+                    "打砖块游戏按 空格 键开始单机创建局域网房间加入房主方向客户端查看排行榜已连接位端口等待失败回退模式";
+                int glyphCount = 0;
+                int* codepoints = LoadCodepoints(menuCharset, &glyphCount);
+                uiFont = LoadFontEx(path, 32, codepoints, glyphCount);
+                if (codepoints != nullptr) {
+                    UnloadCodepoints(codepoints);
+                }
                 if (uiFont.texture.id > 0) {
                     hasChineseFont = true;
                     break;
@@ -418,7 +425,11 @@ void Game::Draw() {
 
         DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
-        DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+        if (hasChineseFont) {
+            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
+        } else {
+            DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+        }
         break;
 
     case GameState::PAUSED:
