@@ -23,12 +23,12 @@ public:
 
     void Draw();
 
-    bool IsActive() { return active; }
+    bool IsActive() const { return active; }
     void SetActive(bool a) { active = a; }
-    Rectangle GetRect() { return rect; }
+    Rectangle GetRect() const { return rect; }
     Color GetColor() const { return color; }
-    BrickType GetType() { return type; }
-    int GetScoreValue() { return scoreValue; }
+    BrickType GetType() const { return type; }
+    int GetScoreValue() const { return scoreValue; }
 };
 
 #endif

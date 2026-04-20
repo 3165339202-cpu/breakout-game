@@ -24,6 +24,9 @@ public:
     Rectangle GetRect() {
         return { position.x, position.y, width, height };
     }
+
+    void SetX(float x) { position.x = x; }
+    float GetX() const { return position.x; }
 };
 
 #endif
