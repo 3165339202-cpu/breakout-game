@@ -365,12 +365,12 @@ void Game::Draw() {
 
     switch (currentState) {
     case GameState::MENU:
-        DrawText("BREAKOUT GAME", 260, 200, 30, WHITE);
-        DrawText("Press SPACE to Start (Offline)", 210, 290, 20, GREEN);
-        DrawText("Press H to Host LAN", 260, 330, 20, SKYBLUE);
-        DrawText("Press J to Join LAN (127.0.0.1)", 180, 360, 20, SKYBLUE);
-        DrawText("Host: arrows + SPACE; Client: A/D", 190, 390, 18, LIGHTGRAY);
-        DrawText("Press L for Leaderboard", 230, 430, 20, YELLOW);
+        DrawText("打砖块游戏", 300, 200, 30, WHITE);
+        DrawText("按 SPACE 开始（单机）", 220, 290, 20, GREEN);
+        DrawText("按 H 创建局域网房间", 230, 330, 20, SKYBLUE);
+        DrawText("按 J 加入局域网（127.0.0.1）", 180, 360, 20, SKYBLUE);
+        DrawText("房主: 方向键+SPACE；客户端: A/D", 165, 390, 18, LIGHTGRAY);
+        DrawText("按 L 查看排行榜", 280, 430, 20, YELLOW);
         break;
 
     case GameState::PLAYING:
@@ -380,8 +380,8 @@ void Game::Draw() {
         for (auto& p : particles) p.Draw();
         for (auto& pu : powerUps) pu.Draw();
 
-        DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
-        DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
+        DrawText(TextFormat("分数: %d", score), 20, 20, 20, WHITE);
+        DrawText(TextFormat("生命: %d", lives), 680, 20, 20, WHITE);
         DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
         break;
 
@@ -392,27 +392,27 @@ void Game::Draw() {
         for (auto& p : particles) p.Draw();
         for (auto& pu : powerUps) pu.Draw();
 
-        DrawText("PAUSED", 350, 300, 30, YELLOW);
+        DrawText("已暂停", 350, 300, 30, YELLOW);
         break;
 
     case GameState::GAMEOVER:
-        DrawText("GAME OVER", 300, 250, 30, RED);
-        DrawText("Press R to Restart", 260, 320, 20, WHITE);
+        DrawText("游戏结束", 300, 250, 30, RED);
+        DrawText("按 R 重新开始", 280, 320, 20, WHITE);
         break;
 
     case GameState::VICTORY:
-        DrawText("YOU WIN!", 300, 250, 30, GREEN);
-        DrawText("Press R to Restart", 260, 320, 20, WHITE);
+        DrawText("你赢了！", 320, 250, 30, GREEN);
+        DrawText("按 R 重新开始", 280, 320, 20, WHITE);
         break;
 
     case GameState::LEADERBOARD:
-        DrawText("LEADERBOARD", 300, 80, 30, GOLD);
+        DrawText("排行榜", 340, 80, 30, GOLD);
 
         for (int i = 0; i < leaderboard.GetCount(); i++) {
             ScoreEntry entry;
             if (leaderboard.GetEntry(i + 1, entry)) {
                 DrawText(
-                    TextFormat("%d. %s - %d", i + 1, entry.name, entry.score),
+                    TextFormat("第%d名 %s - %d分", i + 1, entry.name, entry.score),
                     250,
                     150 + i * 30,
                     20,
@@ -421,7 +421,7 @@ void Game::Draw() {
             }
         }
 
-        DrawText("Press L to return", 270, 500, 20, GRAY);
+        DrawText("按 L 返回菜单", 280, 500, 20, GRAY);
         break;
     }
 
