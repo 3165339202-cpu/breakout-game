@@ -98,7 +98,7 @@ LevelData Loader::BuildLevelData(int levelNumber) const {
     const float brickH = 28.0f;
     const float gap = 8.0f;
     const float startX = 70.0f;
-    const float startY = 80.0f;
+    const float startY = 170.0f;
 
     level.bricks.reserve(rows * cols);
     for (int r = 0; r < rows; ++r) {

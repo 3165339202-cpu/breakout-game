@@ -136,11 +136,14 @@ void Game::HandleCollisions() {
 void Game::Draw() {
     ClearBackground(background);
 
+    DrawRectangle(0, 0, screenWidth, 130, Fade(BLACK, 0.25f));
+    DrawLine(0, 130, screenWidth, 130, Fade(WHITE, 0.2f));
+
     DrawFPS(14, 10);
-    DrawText(TextFormat("Score: %d", score), 14, 40, 26, WHITE);
-    DrawText(TextFormat("Level: %d", currentLevel), 14, 72, 26, WHITE);
-    DrawText("Press L to async load next level", 14, 104, 24, LIGHTGRAY);
-    DrawText(lastLoadNote.c_str(), 14, 132, 20, Fade(WHITE, 0.75f));
+    DrawText(TextFormat("Score: %d", score), 14, 38, 26, WHITE);
+    DrawText(TextFormat("Level: %d", currentLevel), 280, 38, 26, WHITE);
+    DrawText("Press L to async load next level", 14, 72, 24, LIGHTGRAY);
+    DrawText(lastLoadNote.c_str(), 14, 100, 20, Fade(WHITE, 0.75f));
 
     for (const auto& brick : bricks) {
         if (!brick.active) continue;
@@ -242,7 +245,7 @@ LevelData Game::BuildInitialLevel() const {
     for (int r = 0; r < 5; ++r) {
         for (int c = 0; c < 10; ++c) {
             BrickData brick{};
-            brick.rect = {70.0f + c * 114.0f, 80.0f + r * 36.0f, 106.0f, 28.0f};
+            brick.rect = {70.0f + c * 114.0f, 170.0f + r * 36.0f, 106.0f, 28.0f};
             brick.color = rowColors[r];
             brick.active = true;
             level.bricks.push_back(brick);
