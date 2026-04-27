@@ -236,6 +236,7 @@ LevelData Game::BuildInitialLevel() const {
     LevelData level{};
     level.levelNumber = 1;
     level.background = {20, 20, 35, 255};
+    level.loadNote = "initial level loaded on main thread";
 
     const Color rowColors[] = { RED, ORANGE, YELLOW, GREEN, BLUE };
     for (int r = 0; r < 5; ++r) {

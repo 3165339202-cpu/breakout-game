@@ -20,6 +20,10 @@ bool Loader::StartLoadingNextLevel() {
         return false;
     }
 
+    if (workerFuture.valid()) {
+        workerFuture.wait();
+    }
+
     targetLevelNumber = currentLevelNumber + 1;
     const int nextLevel = targetLevelNumber;
     state = LoadState::LOADING;
@@ -38,7 +42,9 @@ void Loader::Update() {
         return;
     }
 
-    if (!completedQueue.Empty()) {
+    if (workerFuture.valid() &&
+        workerFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready &&
+        !completedQueue.Empty()) {
         state = LoadState::DONE;
     }
 }
@@ -115,9 +121,19 @@ LevelData Loader::BuildLevelData(int levelNumber) const {
 }
 
 std::string Loader::LoadRawResourceSample() const {
-    std::ifstream in("../raylib.h", std::ios::binary);
-    if (!in) {
-        return "resource sample unavailable";
+    const char* candidates[] = {"../raylib.h", "raylib.h", "../../raylib.h"};
+
+    std::ifstream in;
+    for (const char* path : candidates) {
+        in.open(path, std::ios::binary);
+        if (in) {
+            break;
+        }
+        in.clear();
+    }
+
+    if (!in.is_open()) {
+        return "resource sample unavailable (raylib.h not found)";
     }
 
     std::ostringstream oss;
