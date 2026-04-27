@@ -1,6 +1,9 @@
 #include "Game.h"
 
 #include <cmath>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 
 Game::Game()
     : screenWidth(1280),
@@ -10,9 +13,15 @@ Game::Game()
       ballLaunched(false),
       aliveBricks(0),
       score(0),
+      lives(3),
       currentLevel(1),
       background({20, 20, 35, 255}),
-      lastLoadNote("resource warmup pending") {}
+      lastLoadNote("resource warmup pending"),
+      paused(false),
+      gameOver(false),
+      showLeaderboard(false) {
+    LoadLeaderboard();
+}
 
 Game::~Game() {
     for (auto& [_, tex] : textureCache) {
@@ -40,6 +49,20 @@ void Game::Run() {
 }
 
 void Game::HandleInput(float dt) {
+    if (IsKeyPressed(KEY_P) && !gameOver) {
+        paused = !paused;
+    }
+    if (IsKeyPressed(KEY_R)) {
+        ResetRunState();
+    }
+    if (IsKeyPressed(KEY_B)) {
+        showLeaderboard = !showLeaderboard;
+    }
+
+    if (paused || gameOver || showLeaderboard) {
+        return;
+    }
+
     if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
         paddle.rect.x -= paddle.speed * dt;
     }
@@ -67,6 +90,10 @@ void Game::Update(float dt) {
     LevelData loadedLevel;
     if (loader.ConsumeLoadedLevel(loadedLevel)) {
         ApplyLevel(loadedLevel);
+    }
+
+    if (paused || gameOver || showLeaderboard) {
+        return;
     }
 
     if (!ballLaunched) {
@@ -100,7 +127,11 @@ void Game::UpdateBall(float dt) {
 
     if (ball.pos.y > screenHeight + 30.0f) {
         ballLaunched = false;
-        score = (score > 10) ? score - 10 : 0;
+        lives--;
+        if (lives <= 0) {
+            gameOver = true;
+            AddLeaderboardScore("Player", score);
+        }
     }
 }
 
@@ -131,6 +162,10 @@ void Game::HandleCollisions() {
             break;
         }
     }
+
+    if (aliveBricks <= 0) {
+        score += 100;
+    }
 }
 
 void Game::Draw() {
@@ -141,9 +176,10 @@ void Game::Draw() {
 
     DrawFPS(14, 10);
     DrawText(TextFormat("Score: %d", score), 14, 38, 26, WHITE);
-    DrawText(TextFormat("Level: %d", currentLevel), 280, 38, 26, WHITE);
+    DrawText(TextFormat("Level: %d", currentLevel), 260, 38, 26, WHITE);
+    DrawText(TextFormat("Lives: %d", lives), 430, 38, 26, WHITE);
     DrawText("Press L to async load next level", 14, 72, 24, LIGHTGRAY);
-    DrawText(lastLoadNote.c_str(), 14, 100, 20, Fade(WHITE, 0.75f));
+    DrawText("P Pause  R Restart  B Leaderboard", 14, 100, 20, Fade(WHITE, 0.75f));
 
     for (const auto& brick : bricks) {
         if (!brick.active) continue;
@@ -172,6 +208,12 @@ void Game::Draw() {
 
     if (!ballLaunched) {
         DrawText("Press SPACE to launch ball", screenWidth / 2 - 160, screenHeight - 90, 28, YELLOW);
+    }
+
+    DrawGameStatusUI();
+
+    if (showLeaderboard) {
+        DrawLeaderboard();
     }
 }
 
@@ -222,6 +264,15 @@ void Game::ApplyLevel(const LevelData& level) {
     ResetBallOnPaddle();
 }
 
+void Game::ResetRunState() {
+    score = 0;
+    lives = 3;
+    paused = false;
+    gameOver = false;
+    showLeaderboard = false;
+    ApplyLevel(BuildInitialLevel());
+}
+
 Texture2D Game::GetOrCreateTexture(const std::string& key, Color color) {
     auto it = textureCache.find(key);
     if (it != textureCache.end()) {
@@ -253,4 +304,68 @@ LevelData Game::BuildInitialLevel() const {
     }
 
     return level;
+}
+
+void Game::DrawGameStatusUI() const {
+    if (paused) {
+        DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.45f));
+        DrawText("PAUSED", screenWidth / 2 - 90, screenHeight / 2 - 50, 56, YELLOW);
+        DrawText("Press P to resume", screenWidth / 2 - 120, screenHeight / 2 + 20, 28, WHITE);
+    }
+
+    if (gameOver) {
+        DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.65f));
+        DrawText("GAME OVER", screenWidth / 2 - 160, screenHeight / 2 - 60, 62, RED);
+        DrawText("Press R to restart", screenWidth / 2 - 135, screenHeight / 2 + 20, 30, WHITE);
+    }
+}
+
+void Game::DrawLeaderboard() const {
+    DrawRectangle(120, 120, screenWidth - 240, screenHeight - 240, Fade(BLACK, 0.88f));
+    DrawRectangleLines(120, 120, screenWidth - 240, screenHeight - 240, GOLD);
+    DrawText("LEADERBOARD", screenWidth / 2 - 160, 155, 44, GOLD);
+
+    if (leaderboard.empty()) {
+        DrawText("No records yet.", screenWidth / 2 - 120, 260, 30, LIGHTGRAY);
+    } else {
+        for (size_t i = 0; i < leaderboard.size(); ++i) {
+            const auto& entry = leaderboard[i];
+            DrawText(TextFormat("%2i. %-10s %6i", static_cast<int>(i + 1), entry.name.c_str(), entry.score),
+                     220, 240 + static_cast<int>(i) * 40, 30, WHITE);
+        }
+    }
+
+    DrawText("Press B to close", screenWidth / 2 - 105, screenHeight - 165, 28, LIGHTGRAY);
+}
+
+void Game::LoadLeaderboard() {
+    leaderboard.clear();
+    std::ifstream in("scores.txt");
+    if (!in) return;
+
+    std::string name;
+    int value = 0;
+    while (in >> name >> value) {
+        leaderboard.push_back({name, value});
+    }
+    std::sort(leaderboard.begin(), leaderboard.end(), [](const ScoreEntry& a, const ScoreEntry& b) {
+        return a.score > b.score;
+    });
+    if (leaderboard.size() > 10) leaderboard.resize(10);
+}
+
+void Game::SaveLeaderboard() const {
+    std::ofstream out("scores.txt", std::ios::trunc);
+    for (const auto& entry : leaderboard) {
+        out << entry.name << " " << entry.score << "\n";
+    }
+}
+
+void Game::AddLeaderboardScore(const std::string& name, int value) {
+    leaderboard.push_back({name, value});
+    std::sort(leaderboard.begin(), leaderboard.end(), [](const ScoreEntry& a, const ScoreEntry& b) {
+        return a.score > b.score;
+    });
+    if (leaderboard.size() > 10) leaderboard.resize(10);
+    SaveLeaderboard();
 }
