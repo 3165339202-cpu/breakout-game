@@ -31,7 +31,7 @@ private:
     void Update(float dt);
     void UpdateBall(float dt);
     void HandleCollisions();
-    void Draw() const;
+    void Draw();
     void DrawLoadingUI() const;
 
     void ResetBallOnPaddle();
@@ -52,6 +52,7 @@ private:
     int score;
     int currentLevel;
     Color background;
+    std::string lastLoadNote;
 
     std::unordered_map<std::string, Texture2D> textureCache;
 };

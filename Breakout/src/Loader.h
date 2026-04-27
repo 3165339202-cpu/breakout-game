@@ -3,8 +3,10 @@
 
 #include <future>
 #include <mutex>
-#include <optional>
+#include <string>
 #include <vector>
+
+#include "ThreadSafeQueue.h"
 #include "raylib.h"
 
 enum class LoadState {
@@ -23,6 +25,7 @@ struct LevelData {
     int levelNumber;
     Color background;
     std::vector<BrickData> bricks;
+    std::string loadNote;
 };
 
 class Loader {
@@ -39,12 +42,14 @@ public:
 
 private:
     LevelData BuildLevelData(int levelNumber) const;
+    std::string LoadRawResourceSample() const;
 
     mutable std::mutex mutex;
     LoadState state;
+    int currentLevelNumber;
     int targetLevelNumber;
-    std::future<LevelData> futureLevel;
-    std::optional<LevelData> completedLevel;
+    std::future<void> workerFuture;
+    ThreadSafeQueue<LevelData> completedQueue;
 };
 
 #endif

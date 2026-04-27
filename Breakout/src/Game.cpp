@@ -11,7 +11,8 @@ Game::Game()
       aliveBricks(0),
       score(0),
       currentLevel(1),
-      background({20, 20, 35, 255}) {}
+      background({20, 20, 35, 255}),
+      lastLoadNote("resource warmup pending") {}
 
 Game::~Game() {
     for (auto& [_, tex] : textureCache) {
@@ -132,13 +133,14 @@ void Game::HandleCollisions() {
     }
 }
 
-void Game::Draw() const {
+void Game::Draw() {
     ClearBackground(background);
 
     DrawFPS(14, 10);
     DrawText(TextFormat("Score: %d", score), 14, 40, 26, WHITE);
     DrawText(TextFormat("Level: %d", currentLevel), 14, 72, 26, WHITE);
     DrawText("Press L to async load next level", 14, 104, 24, LIGHTGRAY);
+    DrawText(lastLoadNote.c_str(), 14, 132, 20, Fade(WHITE, 0.75f));
 
     for (const auto& brick : bricks) {
         if (!brick.active) continue;
@@ -147,8 +149,8 @@ void Game::Draw() const {
     }
 
     const Texture2D paddleTex = (currentLevel % 2 == 0)
-                                    ? const_cast<Game*>(this)->GetOrCreateTexture("paddle_even", BLUE)
-                                    : const_cast<Game*>(this)->GetOrCreateTexture("paddle_odd", GREEN);
+                                    ? GetOrCreateTexture("paddle_even", BLUE)
+                                    : GetOrCreateTexture("paddle_odd", GREEN);
     DrawTexturePro(
         paddleTex,
         Rectangle{0, 0, static_cast<float>(paddleTex.width), static_cast<float>(paddleTex.height)},
@@ -205,6 +207,7 @@ void Game::ApplyLevel(const LevelData& level) {
     currentLevel = level.levelNumber;
     background = level.background;
     bricks = level.bricks;
+    lastLoadNote = level.loadNote;
     aliveBricks = static_cast<int>(bricks.size());
 
     paddle.rect.width = 200.0f - (currentLevel % 5) * 18.0f;

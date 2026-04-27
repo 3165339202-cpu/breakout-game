@@ -1,14 +1,16 @@
 #include "Loader.h"
 
 #include <chrono>
+#include <fstream>
 #include <random>
+#include <sstream>
 #include <thread>
 
-Loader::Loader() : state(LoadState::IDLE), targetLevelNumber(1) {}
+Loader::Loader() : state(LoadState::IDLE), currentLevelNumber(1), targetLevelNumber(1) {}
 
 Loader::~Loader() {
-    if (futureLevel.valid()) {
-        futureLevel.wait();
+    if (workerFuture.valid()) {
+        workerFuture.wait();
     }
 }
 
@@ -18,14 +20,13 @@ bool Loader::StartLoadingNextLevel() {
         return false;
     }
 
-    const int nextLevel = targetLevelNumber + 1;
+    targetLevelNumber = currentLevelNumber + 1;
+    const int nextLevel = targetLevelNumber;
     state = LoadState::LOADING;
-    targetLevelNumber = nextLevel;
-    completedLevel.reset();
 
-    futureLevel = std::async(std::launch::async, [this, nextLevel]() {
+    workerFuture = std::async(std::launch::async, [this, nextLevel]() {
         std::this_thread::sleep_for(std::chrono::seconds(3));
-        return BuildLevelData(nextLevel);
+        completedQueue.Push(BuildLevelData(nextLevel));
     });
 
     return true;
@@ -33,25 +34,28 @@ bool Loader::StartLoadingNextLevel() {
 
 void Loader::Update() {
     std::lock_guard<std::mutex> lock(mutex);
-    if (state != LoadState::LOADING || !futureLevel.valid()) {
+    if (state != LoadState::LOADING) {
         return;
     }
 
-    const auto status = futureLevel.wait_for(std::chrono::milliseconds(0));
-    if (status == std::future_status::ready) {
-        completedLevel = futureLevel.get();
+    if (!completedQueue.Empty()) {
         state = LoadState::DONE;
     }
 }
 
 bool Loader::ConsumeLoadedLevel(LevelData& outLevel) {
     std::lock_guard<std::mutex> lock(mutex);
-    if (state != LoadState::DONE || !completedLevel.has_value()) {
+    if (state != LoadState::DONE) {
         return false;
     }
 
-    outLevel = completedLevel.value();
-    completedLevel.reset();
+    const auto popped = completedQueue.TryPop();
+    if (!popped.has_value()) {
+        return false;
+    }
+
+    outLevel = popped.value();
+    currentLevelNumber = outLevel.levelNumber;
     state = LoadState::IDLE;
     return true;
 }
@@ -106,5 +110,20 @@ LevelData Loader::BuildLevelData(int levelNumber) const {
         }
     }
 
+    level.loadNote = LoadRawResourceSample();
     return level;
+}
+
+std::string Loader::LoadRawResourceSample() const {
+    std::ifstream in("../raylib.h", std::ios::binary);
+    if (!in) {
+        return "resource sample unavailable";
+    }
+
+    std::ostringstream oss;
+    char buf[128]{};
+    in.read(buf, sizeof(buf));
+    const std::streamsize bytes = in.gcount();
+    oss << "resource bytes=" << bytes;
+    return oss.str();
 }
