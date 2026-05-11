@@ -6,6 +6,7 @@
 #include "PowerUp.h"
 #include "PowerUpEffect.h"
 #include "PowerUpFactory.h"
+#include <array>
 #include <vector>
 #include<ctime>
 #include "Leaderboard.h"
@@ -45,12 +46,22 @@ private:
     bool scoreSaved;
 
     // Game.h 中 private 部分添加：
+    static constexpr int MAX_PARTICLES = 1000;
     std::vector<Ball> balls;               // 支持多球
-    std::vector<Particle> particles;    
+    std::array<Particle, MAX_PARTICLES> particlePool; // 固定容量对象池，避免运行时扩容/释放
+    int activeParticleCount;
+    int droppedParticleCount;
     std::vector<PowerUp> powerUps;                                  // 道具列表
     nlohmann::json config;                                          // JSON 配置
     std::vector<std::unique_ptr<PowerUpEffect>> activeEffects;   // 粒子特效
     void GenerateBrickParticles(Rectangle brickRect, Color color);
+    bool SpawnParticle(Vector2 position, Vector2 velocity, Color color, float life = 1.0f, float size = 2.0f);
+    int SpawnParticleBurst(Vector2 center, Color color, int count, float life = 0.8f, float size = 3.0f);
+    void UpdateParticles(float dt);
+    void DrawParticles() const;
+    int CountActiveParticles() const;
+    float GetParticlePoolUsage() const;
+    void RunParticleStressTest();
     float gameTime;
     Leaderboard leaderboard;
 

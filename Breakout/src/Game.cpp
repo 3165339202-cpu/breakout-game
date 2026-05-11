@@ -5,6 +5,7 @@
 #include "Particle.h"
 #include "Brick.h"
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include "ExtendPaddleEffect.h"
@@ -14,6 +15,8 @@ using json = nlohmann::json;
 
 Game::Game()
     : paddle(340, 550, 120, 15),
+      activeParticleCount(0),
+      droppedParticleCount(0),
       leaderboard("scores.txt"),
       networkRole(NetworkRole::OFFLINE),
       remoteMoveLeft(false),
@@ -31,6 +34,12 @@ void Game::Init() {
     lives = 3;
     gameTime = 0.0f;
     scoreSaved = false;
+    activeParticleCount = 0;
+    droppedParticleCount = 0;
+    for (auto& particle : particlePool) {
+        particle.active = false;
+        particle.life = 0.0f;
+    }
     currentState = GameState::MENU;
     balls.clear();
     balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
@@ -106,7 +115,11 @@ void Game::AddBall(const Ball& newBall) {
 }
 
 void Game::AddParticles(const std::vector<Particle>& newParticles) {
-    particles.insert(particles.end(), newParticles.begin(), newParticles.end());
+    // 兼容旧接口：以前这里会 insert 到 std::vector，可能触发扩容和大量复制。
+    // 现在只把外部传入的粒子状态拷贝到对象池中的 inactive 槽位。
+    for (const Particle& particle : newParticles) {
+        SpawnParticle(particle.position, particle.velocity, particle.color, particle.life, particle.size);
+    }
 }
 
 void Game::Update() {
@@ -154,6 +167,9 @@ void Game::Update() {
 
     case GameState::PLAYING: {
         if (IsKeyPressed(KEY_P)) {
+            RunParticleStressTest();
+        }
+        if (IsKeyPressed(KEY_O)) {
             currentState = GameState::PAUSED;
             break;
         }
@@ -351,7 +367,7 @@ void Game::Update() {
     }
 
     case GameState::PAUSED:
-        if (IsKeyPressed(KEY_P)) {
+        if (IsKeyPressed(KEY_O)) {
             currentState = GameState::PLAYING;
         }
         break;
@@ -383,15 +399,7 @@ void Game::Update() {
         break;
     }
 
-    float dt = GetFrameTime();
-    for (auto& p : particles) {
-        p.Update(dt);
-    }
-    particles.erase(
-        std::remove_if(particles.begin(), particles.end(),
-                       [](const Particle& p) { return !p.IsAlive(); }),
-        particles.end()
-    );
+    UpdateParticles(GetFrameTime());
 }
 
 
@@ -429,15 +437,21 @@ void Game::Draw() {
         for (auto& brick : bricks) brick.Draw();
         paddle.Draw();
         for (auto& b : balls) b.Draw();
-        for (auto& p : particles) p.Draw();
+        DrawParticles();
         for (auto& pu : powerUps) pu.Draw();
 
-        DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
+        DrawFPS(10, 10);
+        DrawText(TextFormat("Score: %d", score), 20, 35, 20, WHITE);
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
+        DrawText(TextFormat("Particles: %d/%d", activeParticleCount, MAX_PARTICLES), 20, 65, 18, WHITE);
+        DrawText(TextFormat("Pool Usage: %.1f%%", GetParticlePoolUsage() * 100.0f), 20, 88, 18, LIGHTGRAY);
+        DrawText(TextFormat("FrameTime: %.3f ms", GetFrameTime() * 1000.0f), 20, 111, 18, LIGHTGRAY);
+        DrawText(TextFormat("Dropped: %d", droppedParticleCount), 20, 134, 18, ORANGE);
+        DrawText("KEY_P: particle stress test  KEY_O: pause", 20, 560, 18, SKYBLUE);
         if (hasChineseFont) {
-            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
+            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 160}, 22, 1, SKYBLUE);
         } else {
-            DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+            DrawText(networkHint.c_str(), 20, 160, 18, SKYBLUE);
         }
         break;
 
@@ -445,7 +459,7 @@ void Game::Draw() {
         for (auto& brick : bricks) brick.Draw();
         paddle.Draw();
         for (auto& b : balls) b.Draw();
-        for (auto& p : particles) p.Draw();
+        DrawParticles();
         for (auto& pu : powerUps) pu.Draw();
 
         DrawText("PAUSED", 350, 300, 30, YELLOW);
@@ -485,17 +499,98 @@ void Game::Draw() {
 }
 
 void Game::GenerateBrickParticles(Rectangle brickRect, Color color) {
-    for (int i = 0; i < 12; i++) {
-        Vector2 vel = {
-            (float)(rand() % 100 - 50) * 0.5f,
-            (float)(rand() % 100 - 50) * 0.5f
-        };
-        Vector2 pos = {
-            brickRect.x + brickRect.width / 2.0f,
-            brickRect.y + brickRect.height / 2.0f
-        };
-        particles.emplace_back(pos, vel, color, 0.8f, 3.0f);
+    const Vector2 pos = {
+        brickRect.x + brickRect.width / 2.0f,
+        brickRect.y + brickRect.height / 2.0f
+    };
+    SpawnParticleBurst(pos, color, 12, 0.8f, 3.0f);
+}
+
+bool Game::SpawnParticle(Vector2 position, Vector2 velocity, Color color, float life, float size) {
+    // 性能优化报告：旧版粒子系统使用 std::vector<Particle>::emplace_back 每次爆炸动态追加粒子，
+    // 并在每帧 update 后 erase/remove 已死亡粒子。压力测试下 vector 可能多次扩容、复制/移动元素，
+    // erase 还会移动后续元素；如果改成 new/delete，堆分配也会因为分配器查找空闲块、同步和缓存未命中而变慢。
+    // 对象池在 Init 时预留固定数组，运行时只扫描 inactive 粒子并 Reset，life<=0 仅 active=false，
+    // 因此减少了粒子生成/销毁阶段的内存分配、释放、扩容和元素搬移，数据也更连续、更缓存友好。
+    for (Particle& particle : particlePool) {
+        if (!particle.active) {
+            particle.Reset(position, velocity, color, life, size);
+            return true;
+        }
     }
+
+    droppedParticleCount++;
+    return false;
+}
+
+int Game::SpawnParticleBurst(Vector2 center, Color color, int count, float life, float size) {
+    const double start = GetTime();
+    int spawned = 0;
+
+    for (int i = 0; i < count; i++) {
+        Vector2 vel = {
+            static_cast<float>(rand() % 100 - 50) * 0.5f,
+            static_cast<float>(rand() % 100 - 50) * 0.5f
+        };
+
+        if (SpawnParticle(center, vel, color, life, size)) {
+            spawned++;
+        }
+    }
+
+    activeParticleCount = CountActiveParticles();
+    TraceLog(LOG_INFO,
+             "Particle pool burst: requested=%d spawned=%d active=%d capacity=%d dropped_total=%d spawn_time=%.3f ms",
+             count, spawned, activeParticleCount, MAX_PARTICLES, droppedParticleCount,
+             (GetTime() - start) * 1000.0);
+    return spawned;
+}
+
+void Game::UpdateParticles(float dt) {
+    activeParticleCount = 0;
+
+    for (Particle& particle : particlePool) {
+        if (!particle.active) continue;
+
+        particle.Update(dt);
+        if (particle.active) {
+            activeParticleCount++;
+        }
+    }
+}
+
+void Game::DrawParticles() const {
+    // raylib 会批处理相同绘制状态的简单图元；这里跳过 inactive 粒子，避免无意义 DrawCircleV 调用。
+    for (const Particle& particle : particlePool) {
+        if (particle.active) {
+            particle.Draw();
+        }
+    }
+}
+
+int Game::CountActiveParticles() const {
+    int count = 0;
+    for (const Particle& particle : particlePool) {
+        if (particle.active) count++;
+    }
+    return count;
+}
+
+float Game::GetParticlePoolUsage() const {
+    return static_cast<float>(activeParticleCount) / static_cast<float>(MAX_PARTICLES);
+}
+
+void Game::RunParticleStressTest() {
+    const Vector2 center = {400.0f, 300.0f};
+    const int requestedParticles = MAX_PARTICLES;
+    const int before = CountActiveParticles();
+    const double start = GetTime();
+    const int spawned = SpawnParticleBurst(center, GOLD, requestedParticles, 1.5f, 3.0f);
+    const double elapsedMs = (GetTime() - start) * 1000.0;
+
+    TraceLog(LOG_INFO,
+             "KEY_P stress test: before=%d requested=%d spawned=%d after=%d fps=%d frame_time=%.3f ms elapsed=%.3f ms",
+             before, requestedParticles, spawned, CountActiveParticles(), GetFPS(), GetFrameTime() * 1000.0f, elapsedMs);
 }
 
 std::string Game::BuildNetworkState() const {

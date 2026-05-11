@@ -3,8 +3,10 @@ project(Breakout)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(${CMAKE_SOURCE_DIR}/../src)
-link_directories(${CMAKE_SOURCE_DIR}/../build)
+set(RAYLIB_ROOT ${CMAKE_SOURCE_DIR}/..)
+
+include_directories(${RAYLIB_ROOT})
+link_directories(${RAYLIB_ROOT})
 
 add_executable(breakout_week2 
     src/main.cpp 
