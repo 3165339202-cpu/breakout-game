@@ -112,10 +112,15 @@ void Game::Init() {
 
     if (!hasChineseFont) {
         const int chineseCodepoints[] = {
-            25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
-            21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475
+            // 菜单、联网提示和 HUD 中会出现的中文。缺字会被 raylib 显示为 '?'，
+            // 所以这里显式补齐“格、模、客、户、榜”等之前漏掉的字形。
+            20002, 20027, 20301, 20572, 20837, 21019, 21040, 21147, 21152, 21333,
+            21387, 21475, 21521, 22238, 22359, 22495, 22833, 22987, 23376, 23458,
+            23545, 23616, 24050, 24314, 24320, 24323, 24335, 24453, 25103, 25143,
+            25151, 25171, 25353, 25490, 25509, 26041, 26242, 26426, 26597, 26684,
+            27036, 27169, 27744, 27979, 28216, 30475, 30742, 31354, 31471, 31561,
+            31890, 32593, 34892, 35797, 35937, 36133, 36830, 36864, 38190, 38388,
+            65292
         };
 
         std::vector<int> codepoints;
@@ -476,20 +481,21 @@ void Game::Draw() {
         DrawParticles();
         for (auto& pu : powerUps) pu.Draw();
 
-        DrawRectangle(0, 0, 800, 76, Fade(BLACK, 0.72f));
-        DrawFPS(10, 10);
-        DrawText(TextFormat("Score: %d", score), 120, 12, 20, WHITE);
-        DrawText(TextFormat("Particles: %d/%d", activeParticleCount, MAX_PARTICLES), 260, 12, 18, WHITE);
-        DrawText(TextFormat("FrameTime: %.3f ms", GetFrameTime() * 1000.0f), 470, 12, 18, LIGHTGRAY);
-        DrawText(TextFormat("Lives: %d", lives), 690, 12, 20, WHITE);
+        DrawRectangle(0, 0, 800, 64, Fade(BLACK, 0.78f));
+        DrawFPS(10, 8);
+        DrawText(TextFormat("Score:%d", score), 112, 10, 16, WHITE);
+        DrawText(TextFormat("Lives:%d", lives), 220, 10, 16, WHITE);
+        DrawText(TextFormat("Particles:%d/%d", activeParticleCount, MAX_PARTICLES), 320, 10, 16, WHITE);
+        DrawText(TextFormat("FT:%.1fms", GetFrameTime() * 1000.0f), 505, 10, 16, LIGHTGRAY);
+        DrawText(TextFormat("Pool:%.0f%%", GetParticlePoolUsage() * 100.0f), 635, 10, 16, LIGHTGRAY);
         if (hasChineseFont) {
-            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 42}, 20, 1, SKYBLUE);
+            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 36}, 18, 1, SKYBLUE);
         } else {
-            DrawText(networkHint.c_str(), 20, 44, 18, SKYBLUE);
+            DrawText(networkHint.c_str(), 20, 38, 16, SKYBLUE);
         }
-        DrawText(TextFormat("Pool: %.1f%%", GetParticlePoolUsage() * 100.0f), 420, 44, 18, LIGHTGRAY);
-        DrawText(TextFormat("Dropped: %d", droppedParticleCount), 535, 44, 18, ORANGE);
-        DrawText("P: Stress  O: Pause", 650, 44, 18, SKYBLUE);
+        DrawText(TextFormat("Dropped:%d", droppedParticleCount), 180, 38, 16, ORANGE);
+        DrawText("P:Stress", 300, 38, 16, SKYBLUE);
+        DrawText("O:Pause", 400, 38, 16, SKYBLUE);
         break;
 
     case GameState::PAUSED:
