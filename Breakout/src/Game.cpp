@@ -26,10 +26,29 @@ Game::Game()
       hasChineseFont(false) {}
 
 void Game::Init() {
-    std::ifstream configFile("config.json");
-    if (configFile.is_open()) {
-        configFile >> config;
+    config = {
+        {"powerups", {
+            {"paddle_extend", {{"extra_width", 40}, {"duration", 5.0f}, {"drop_rate", 0.3f}}},
+            {"multi_ball", {{"extra_balls", 2}, {"duration", 0.0f}, {"drop_rate", 0.2f}}},
+            {"slow_ball", {{"speed_factor", 0.7f}, {"duration", 5.0f}, {"drop_rate", 0.25f}}}
+        }}
+    };
+
+    const char* configCandidates[] = {
+        "config.json",
+        "src/config.json",
+        "../src/config.json",
+        "Breakout/src/config.json"
+    };
+    for (const char* path : configCandidates) {
+        std::ifstream configFile(path);
+        if (configFile.is_open()) {
+            configFile >> config;
+            TraceLog(LOG_INFO, "CONFIG: Loaded %s", path);
+            break;
+        }
     }
+
     score = 0;
     lives = 3;
     gameTime = 0.0f;

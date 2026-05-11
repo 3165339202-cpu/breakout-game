@@ -6,7 +6,7 @@
 void TestCollisionTrue() {
     Ball ball({100, 100}, {0, 0}, 10);
 
-    ball.Launch(100, 100);   // ⭐ 加这一句！！！
+    ball.SetLaunched(true);
 
     Rectangle brick = {90, 90, 50, 20};
 
@@ -21,7 +21,7 @@ void TestCollisionTrue() {
 void TestCollisionFalse() {
     Ball ball({10, 10}, {0, 0}, 10);
 
-    ball.Launch(10, 100);   // ⭐ 加！！！
+    ball.SetLaunched(true);
 
     Rectangle brick = {200, 200, 50, 20};
 

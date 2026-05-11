@@ -23,3 +23,14 @@ add_executable(breakout_week2
 )
 
 target_link_libraries(breakout_week2 raylib m pthread dl rt X11)
+
+
+add_custom_target(copy_breakout_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/src/config.json
+            ${CMAKE_BINARY_DIR}/config.json
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/fonts
+            ${CMAKE_BINARY_DIR}/fonts
+)
+add_dependencies(breakout_week2 copy_breakout_assets)
