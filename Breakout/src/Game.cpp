@@ -13,6 +13,46 @@
 #include "SlowBallEffect.h"
 using json = nlohmann::json;
 
+namespace {
+void DrawCenteredText(Font font, bool hasFont, const char* text, float y, float fontSize, Color color) {
+    if (hasFont) {
+        const Vector2 size = MeasureTextEx(font, text, fontSize, 1.0f);
+        DrawTextEx(font, text, Vector2{(800.0f - size.x) * 0.5f, y}, fontSize, 1.0f, color);
+    } else {
+        const int size = static_cast<int>(fontSize);
+        DrawText(text, (800 - MeasureText(text, size)) / 2, static_cast<int>(y), size, color);
+    }
+}
+
+std::unique_ptr<PowerUpEffect> MakePowerUpEffect(PowerUpType type, const json& config) {
+    const json powerups = config.contains("powerups") && config["powerups"].is_object()
+                            ? config["powerups"]
+                            : json::object();
+
+    switch(type) {
+        case PowerUpType::PADDLE_EXTEND: {
+            const json settings = powerups.value("paddle_extend", json::object());
+            return std::make_unique<ExtendPaddleEffect>(
+                settings.value("extra_width", 40.0f),
+                settings.value("duration", 5.0f));
+        }
+        case PowerUpType::MULTI_BALL: {
+            const json settings = powerups.value("multi_ball", json::object());
+            return std::make_unique<MultiBallEffect>(
+                settings.value("extra_balls", 2));
+        }
+        case PowerUpType::SLOW_BALL: {
+            const json settings = powerups.value("slow_ball", json::object());
+            return std::make_unique<SlowBallEffect>(
+                settings.value("speed_factor", 0.7f),
+                settings.value("duration", 5.0f));
+        }
+    }
+
+    return nullptr;
+}
+}
+
 Game::Game()
     : paddle(340, 550, 120, 15),
       activeParticleCount(0),
@@ -306,28 +346,14 @@ void Game::Update() {
                     brick.SetActive(false);
                     if ((rand() % 100) < 30) {
                         PowerUpType puType = static_cast<PowerUpType>(rand() % 3);
-                        std::unique_ptr<PowerUpEffect> effect;
-                        switch(puType) {
-                            case PowerUpType::PADDLE_EXTEND:
-                                effect = std::make_unique<ExtendPaddleEffect>(
-                                    config["powerups"]["paddle_extend"]["extra_width"],
-                                    config["powerups"]["paddle_extend"]["duration"]);
-                                break;
-                            case PowerUpType::MULTI_BALL:
-                                effect = std::make_unique<MultiBallEffect>(
-                                    config["powerups"]["multi_ball"]["extra_balls"]);
-                                break;
-                            case PowerUpType::SLOW_BALL:
-                                effect = std::make_unique<SlowBallEffect>(
-                                    config["powerups"]["slow_ball"]["speed_factor"],
-                                    config["powerups"]["slow_ball"]["duration"]);
-                                break;
+                        auto effect = MakePowerUpEffect(puType, config);
+                        if (effect) {
+                            powerUps.emplace_back(
+                                Vector2{brick.GetRect().x + brick.GetRect().width/2, brick.GetRect().y},
+                                puType,
+                                std::move(effect)
+                            );
                         }
-                        powerUps.emplace_back(
-                            Vector2{brick.GetRect().x + brick.GetRect().width/2, brick.GetRect().y},
-                            puType,
-                            std::move(effect)
-                        );
                     }
                     GenerateBrickParticles(hit, brickColor);
 
@@ -435,21 +461,12 @@ void Game::Draw() {
 
     switch (currentState) {
     case GameState::MENU:
-        if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 200}, 44, 1, WHITE);
-            DrawTextEx(uiFont, "按 空格 键开始单机游戏", Vector2{190, 285}, 28, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 325}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 365}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "房主: 方向键+空格  客户端: A/D", Vector2{145, 405}, 24, 1, LIGHTGRAY);
-            DrawTextEx(uiFont, "按 L 键查看排行榜", Vector2{230, 445}, 28, 1, YELLOW);
-        } else {
-            DrawText("BREAKOUT GAME", 260, 200, 30, WHITE);
-            DrawText("Press SPACE to Start (Offline)", 210, 290, 20, GREEN);
-            DrawText("Press H to Host LAN", 260, 330, 20, SKYBLUE);
-            DrawText("Press J to Join LAN (127.0.0.1)", 180, 360, 20, SKYBLUE);
-            DrawText("Host: arrows + SPACE; Client: A/D", 190, 390, 18, LIGHTGRAY);
-            DrawText("Press L for Leaderboard", 230, 430, 20, YELLOW);
-        }
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "打砖块游戏" : "BREAKOUT GAME", 190, 44, WHITE);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 空格 键开始单机游戏" : "Press SPACE to Start (Offline)", 285, 28, GREEN);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 H 键创建局域网房间" : "Press H to Host LAN", 325, 28, SKYBLUE);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 J 键加入 127.0.0.1 房间" : "Press J to Join LAN (127.0.0.1)", 365, 28, SKYBLUE);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "房主: 方向键+空格  客户端: A/D" : "Host: arrows + SPACE; Client: A/D", 405, 24, LIGHTGRAY);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 L 键查看排行榜" : "Press L for Leaderboard", 445, 28, YELLOW);
         break;
 
     case GameState::PLAYING:
@@ -459,19 +476,20 @@ void Game::Draw() {
         DrawParticles();
         for (auto& pu : powerUps) pu.Draw();
 
+        DrawRectangle(0, 0, 800, 76, Fade(BLACK, 0.72f));
         DrawFPS(10, 10);
-        DrawText(TextFormat("Score: %d", score), 20, 35, 20, WHITE);
-        DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
-        DrawText(TextFormat("Particles: %d/%d", activeParticleCount, MAX_PARTICLES), 20, 65, 18, WHITE);
-        DrawText(TextFormat("Pool Usage: %.1f%%", GetParticlePoolUsage() * 100.0f), 20, 88, 18, LIGHTGRAY);
-        DrawText(TextFormat("FrameTime: %.3f ms", GetFrameTime() * 1000.0f), 20, 111, 18, LIGHTGRAY);
-        DrawText(TextFormat("Dropped: %d", droppedParticleCount), 20, 134, 18, ORANGE);
-        DrawText("KEY_P: particle stress test  KEY_O: pause", 20, 560, 18, SKYBLUE);
+        DrawText(TextFormat("Score: %d", score), 120, 12, 20, WHITE);
+        DrawText(TextFormat("Particles: %d/%d", activeParticleCount, MAX_PARTICLES), 260, 12, 18, WHITE);
+        DrawText(TextFormat("FrameTime: %.3f ms", GetFrameTime() * 1000.0f), 470, 12, 18, LIGHTGRAY);
+        DrawText(TextFormat("Lives: %d", lives), 690, 12, 20, WHITE);
         if (hasChineseFont) {
-            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 160}, 22, 1, SKYBLUE);
+            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 42}, 20, 1, SKYBLUE);
         } else {
-            DrawText(networkHint.c_str(), 20, 160, 18, SKYBLUE);
+            DrawText(networkHint.c_str(), 20, 44, 18, SKYBLUE);
         }
+        DrawText(TextFormat("Pool: %.1f%%", GetParticlePoolUsage() * 100.0f), 420, 44, 18, LIGHTGRAY);
+        DrawText(TextFormat("Dropped: %d", droppedParticleCount), 535, 44, 18, ORANGE);
+        DrawText("P: Stress  O: Pause", 650, 44, 18, SKYBLUE);
         break;
 
     case GameState::PAUSED:
