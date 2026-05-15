@@ -5,6 +5,7 @@
 #include "Particle.h"
 #include "Brick.h"
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include "ExtendPaddleEffect.h"
@@ -12,8 +13,50 @@
 #include "SlowBallEffect.h"
 using json = nlohmann::json;
 
+namespace {
+void DrawCenteredText(Font font, bool hasFont, const char* text, float y, float fontSize, Color color) {
+    if (hasFont) {
+        const Vector2 size = MeasureTextEx(font, text, fontSize, 1.0f);
+        DrawTextEx(font, text, Vector2{(800.0f - size.x) * 0.5f, y}, fontSize, 1.0f, color);
+    } else {
+        const int size = static_cast<int>(fontSize);
+        DrawText(text, (800 - MeasureText(text, size)) / 2, static_cast<int>(y), size, color);
+    }
+}
+
+std::unique_ptr<PowerUpEffect> MakePowerUpEffect(PowerUpType type, const json& config) {
+    const json powerups = config.contains("powerups") && config["powerups"].is_object()
+                            ? config["powerups"]
+                            : json::object();
+
+    switch(type) {
+        case PowerUpType::PADDLE_EXTEND: {
+            const json settings = powerups.value("paddle_extend", json::object());
+            return std::make_unique<ExtendPaddleEffect>(
+                settings.value("extra_width", 40.0f),
+                settings.value("duration", 5.0f));
+        }
+        case PowerUpType::MULTI_BALL: {
+            const json settings = powerups.value("multi_ball", json::object());
+            return std::make_unique<MultiBallEffect>(
+                settings.value("extra_balls", 2));
+        }
+        case PowerUpType::SLOW_BALL: {
+            const json settings = powerups.value("slow_ball", json::object());
+            return std::make_unique<SlowBallEffect>(
+                settings.value("speed_factor", 0.7f),
+                settings.value("duration", 5.0f));
+        }
+    }
+
+    return nullptr;
+}
+}
+
 Game::Game()
     : paddle(340, 550, 120, 15),
+      activeParticleCount(0),
+      droppedParticleCount(0),
       leaderboard("scores.txt"),
       networkRole(NetworkRole::OFFLINE),
       remoteMoveLeft(false),
@@ -23,14 +66,39 @@ Game::Game()
       hasChineseFont(false) {}
 
 void Game::Init() {
-    std::ifstream configFile("config.json");
-    if (configFile.is_open()) {
-        configFile >> config;
+    config = {
+        {"powerups", {
+            {"paddle_extend", {{"extra_width", 40}, {"duration", 5.0f}, {"drop_rate", 0.3f}}},
+            {"multi_ball", {{"extra_balls", 2}, {"duration", 0.0f}, {"drop_rate", 0.2f}}},
+            {"slow_ball", {{"speed_factor", 0.7f}, {"duration", 5.0f}, {"drop_rate", 0.25f}}}
+        }}
+    };
+
+    const char* configCandidates[] = {
+        "config.json",
+        "src/config.json",
+        "../src/config.json",
+        "Breakout/src/config.json"
+    };
+    for (const char* path : configCandidates) {
+        std::ifstream configFile(path);
+        if (configFile.is_open()) {
+            configFile >> config;
+            TraceLog(LOG_INFO, "CONFIG: Loaded %s", path);
+            break;
+        }
     }
+
     score = 0;
     lives = 3;
     gameTime = 0.0f;
     scoreSaved = false;
+    activeParticleCount = 0;
+    droppedParticleCount = 0;
+    for (auto& particle : particlePool) {
+        particle.active = false;
+        particle.life = 0.0f;
+    }
     currentState = GameState::MENU;
     balls.clear();
     balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
@@ -44,10 +112,15 @@ void Game::Init() {
 
     if (!hasChineseFont) {
         const int chineseCodepoints[] = {
-            25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
-            21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475
+            // 菜单、联网提示和 HUD 中会出现的中文。缺字会被 raylib 显示为 '?'，
+            // 所以这里显式补齐“格、模、客、户、榜”等之前漏掉的字形。
+            20002, 20027, 20301, 20572, 20837, 21019, 21040, 21147, 21152, 21333,
+            21387, 21475, 21521, 22238, 22359, 22495, 22833, 22987, 23376, 23458,
+            23545, 23616, 24050, 24314, 24320, 24323, 24335, 24453, 25103, 25143,
+            25151, 25171, 25353, 25490, 25509, 26041, 26242, 26426, 26597, 26684,
+            27036, 27169, 27744, 27979, 28216, 30475, 30742, 31354, 31471, 31561,
+            31890, 32593, 34892, 35797, 35937, 36133, 36830, 36864, 38190, 38388,
+            65292
         };
 
         std::vector<int> codepoints;
@@ -106,7 +179,11 @@ void Game::AddBall(const Ball& newBall) {
 }
 
 void Game::AddParticles(const std::vector<Particle>& newParticles) {
-    particles.insert(particles.end(), newParticles.begin(), newParticles.end());
+    // 兼容旧接口：以前这里会 insert 到 std::vector，可能触发扩容和大量复制。
+    // 现在只把外部传入的粒子状态拷贝到对象池中的 inactive 槽位。
+    for (const Particle& particle : newParticles) {
+        SpawnParticle(particle.position, particle.velocity, particle.color, particle.life, particle.size);
+    }
 }
 
 void Game::Update() {
@@ -154,6 +231,9 @@ void Game::Update() {
 
     case GameState::PLAYING: {
         if (IsKeyPressed(KEY_P)) {
+            RunParticleStressTest();
+        }
+        if (IsKeyPressed(KEY_O)) {
             currentState = GameState::PAUSED;
             break;
         }
@@ -271,28 +351,14 @@ void Game::Update() {
                     brick.SetActive(false);
                     if ((rand() % 100) < 30) {
                         PowerUpType puType = static_cast<PowerUpType>(rand() % 3);
-                        std::unique_ptr<PowerUpEffect> effect;
-                        switch(puType) {
-                            case PowerUpType::PADDLE_EXTEND:
-                                effect = std::make_unique<ExtendPaddleEffect>(
-                                    config["powerups"]["paddle_extend"]["extra_width"],
-                                    config["powerups"]["paddle_extend"]["duration"]);
-                                break;
-                            case PowerUpType::MULTI_BALL:
-                                effect = std::make_unique<MultiBallEffect>(
-                                    config["powerups"]["multi_ball"]["extra_balls"]);
-                                break;
-                            case PowerUpType::SLOW_BALL:
-                                effect = std::make_unique<SlowBallEffect>(
-                                    config["powerups"]["slow_ball"]["speed_factor"],
-                                    config["powerups"]["slow_ball"]["duration"]);
-                                break;
+                        auto effect = MakePowerUpEffect(puType, config);
+                        if (effect) {
+                            powerUps.emplace_back(
+                                Vector2{brick.GetRect().x + brick.GetRect().width/2, brick.GetRect().y},
+                                puType,
+                                std::move(effect)
+                            );
                         }
-                        powerUps.emplace_back(
-                            Vector2{brick.GetRect().x + brick.GetRect().width/2, brick.GetRect().y},
-                            puType,
-                            std::move(effect)
-                        );
                     }
                     GenerateBrickParticles(hit, brickColor);
 
@@ -351,7 +417,7 @@ void Game::Update() {
     }
 
     case GameState::PAUSED:
-        if (IsKeyPressed(KEY_P)) {
+        if (IsKeyPressed(KEY_O)) {
             currentState = GameState::PLAYING;
         }
         break;
@@ -383,15 +449,7 @@ void Game::Update() {
         break;
     }
 
-    float dt = GetFrameTime();
-    for (auto& p : particles) {
-        p.Update(dt);
-    }
-    particles.erase(
-        std::remove_if(particles.begin(), particles.end(),
-                       [](const Particle& p) { return !p.IsAlive(); }),
-        particles.end()
-    );
+    UpdateParticles(GetFrameTime());
 }
 
 
@@ -408,44 +466,43 @@ void Game::Draw() {
 
     switch (currentState) {
     case GameState::MENU:
-        if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 200}, 44, 1, WHITE);
-            DrawTextEx(uiFont, "按 空格 键开始单机游戏", Vector2{190, 285}, 28, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 325}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 365}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "房主: 方向键+空格  客户端: A/D", Vector2{145, 405}, 24, 1, LIGHTGRAY);
-            DrawTextEx(uiFont, "按 L 键查看排行榜", Vector2{230, 445}, 28, 1, YELLOW);
-        } else {
-            DrawText("BREAKOUT GAME", 260, 200, 30, WHITE);
-            DrawText("Press SPACE to Start (Offline)", 210, 290, 20, GREEN);
-            DrawText("Press H to Host LAN", 260, 330, 20, SKYBLUE);
-            DrawText("Press J to Join LAN (127.0.0.1)", 180, 360, 20, SKYBLUE);
-            DrawText("Host: arrows + SPACE; Client: A/D", 190, 390, 18, LIGHTGRAY);
-            DrawText("Press L for Leaderboard", 230, 430, 20, YELLOW);
-        }
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "打砖块游戏" : "BREAKOUT GAME", 190, 44, WHITE);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 空格 键开始单机游戏" : "Press SPACE to Start (Offline)", 285, 28, GREEN);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 H 键创建局域网房间" : "Press H to Host LAN", 325, 28, SKYBLUE);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 J 键加入 127.0.0.1 房间" : "Press J to Join LAN (127.0.0.1)", 365, 28, SKYBLUE);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "房主: 方向键+空格  客户端: A/D" : "Host: arrows + SPACE; Client: A/D", 405, 24, LIGHTGRAY);
+        DrawCenteredText(uiFont, hasChineseFont, hasChineseFont ? "按 L 键查看排行榜" : "Press L for Leaderboard", 445, 28, YELLOW);
         break;
 
     case GameState::PLAYING:
         for (auto& brick : bricks) brick.Draw();
         paddle.Draw();
         for (auto& b : balls) b.Draw();
-        for (auto& p : particles) p.Draw();
+        DrawParticles();
         for (auto& pu : powerUps) pu.Draw();
 
-        DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
-        DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
+        DrawRectangle(0, 0, 800, 64, Fade(BLACK, 0.78f));
+        DrawFPS(10, 8);
+        DrawText(TextFormat("Score:%d", score), 112, 10, 16, WHITE);
+        DrawText(TextFormat("Lives:%d", lives), 220, 10, 16, WHITE);
+        DrawText(TextFormat("Particles:%d/%d", activeParticleCount, MAX_PARTICLES), 320, 10, 16, WHITE);
+        DrawText(TextFormat("FT:%.1fms", GetFrameTime() * 1000.0f), 505, 10, 16, LIGHTGRAY);
+        DrawText(TextFormat("Pool:%.0f%%", GetParticlePoolUsage() * 100.0f), 635, 10, 16, LIGHTGRAY);
         if (hasChineseFont) {
-            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
+            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 36}, 18, 1, SKYBLUE);
         } else {
-            DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+            DrawText(networkHint.c_str(), 20, 38, 16, SKYBLUE);
         }
+        DrawText(TextFormat("Dropped:%d", droppedParticleCount), 180, 38, 16, ORANGE);
+        DrawText("P:Stress", 300, 38, 16, SKYBLUE);
+        DrawText("O:Pause", 400, 38, 16, SKYBLUE);
         break;
 
     case GameState::PAUSED:
         for (auto& brick : bricks) brick.Draw();
         paddle.Draw();
         for (auto& b : balls) b.Draw();
-        for (auto& p : particles) p.Draw();
+        DrawParticles();
         for (auto& pu : powerUps) pu.Draw();
 
         DrawText("PAUSED", 350, 300, 30, YELLOW);
@@ -485,17 +542,98 @@ void Game::Draw() {
 }
 
 void Game::GenerateBrickParticles(Rectangle brickRect, Color color) {
-    for (int i = 0; i < 12; i++) {
-        Vector2 vel = {
-            (float)(rand() % 100 - 50) * 0.5f,
-            (float)(rand() % 100 - 50) * 0.5f
-        };
-        Vector2 pos = {
-            brickRect.x + brickRect.width / 2.0f,
-            brickRect.y + brickRect.height / 2.0f
-        };
-        particles.emplace_back(pos, vel, color, 0.8f, 3.0f);
+    const Vector2 pos = {
+        brickRect.x + brickRect.width / 2.0f,
+        brickRect.y + brickRect.height / 2.0f
+    };
+    SpawnParticleBurst(pos, color, 12, 0.8f, 3.0f);
+}
+
+bool Game::SpawnParticle(Vector2 position, Vector2 velocity, Color color, float life, float size) {
+    // 性能优化报告：旧版粒子系统使用 std::vector<Particle>::emplace_back 每次爆炸动态追加粒子，
+    // 并在每帧 update 后 erase/remove 已死亡粒子。压力测试下 vector 可能多次扩容、复制/移动元素，
+    // erase 还会移动后续元素；如果改成 new/delete，堆分配也会因为分配器查找空闲块、同步和缓存未命中而变慢。
+    // 对象池在 Init 时预留固定数组，运行时只扫描 inactive 粒子并 Reset，life<=0 仅 active=false，
+    // 因此减少了粒子生成/销毁阶段的内存分配、释放、扩容和元素搬移，数据也更连续、更缓存友好。
+    for (Particle& particle : particlePool) {
+        if (!particle.active) {
+            particle.Reset(position, velocity, color, life, size);
+            return true;
+        }
     }
+
+    droppedParticleCount++;
+    return false;
+}
+
+int Game::SpawnParticleBurst(Vector2 center, Color color, int count, float life, float size) {
+    const double start = GetTime();
+    int spawned = 0;
+
+    for (int i = 0; i < count; i++) {
+        Vector2 vel = {
+            static_cast<float>(rand() % 100 - 50) * 0.5f,
+            static_cast<float>(rand() % 100 - 50) * 0.5f
+        };
+
+        if (SpawnParticle(center, vel, color, life, size)) {
+            spawned++;
+        }
+    }
+
+    activeParticleCount = CountActiveParticles();
+    TraceLog(LOG_INFO,
+             "Particle pool burst: requested=%d spawned=%d active=%d capacity=%d dropped_total=%d spawn_time=%.3f ms",
+             count, spawned, activeParticleCount, MAX_PARTICLES, droppedParticleCount,
+             (GetTime() - start) * 1000.0);
+    return spawned;
+}
+
+void Game::UpdateParticles(float dt) {
+    activeParticleCount = 0;
+
+    for (Particle& particle : particlePool) {
+        if (!particle.active) continue;
+
+        particle.Update(dt);
+        if (particle.active) {
+            activeParticleCount++;
+        }
+    }
+}
+
+void Game::DrawParticles() const {
+    // raylib 会批处理相同绘制状态的简单图元；这里跳过 inactive 粒子，避免无意义 DrawCircleV 调用。
+    for (const Particle& particle : particlePool) {
+        if (particle.active) {
+            particle.Draw();
+        }
+    }
+}
+
+int Game::CountActiveParticles() const {
+    int count = 0;
+    for (const Particle& particle : particlePool) {
+        if (particle.active) count++;
+    }
+    return count;
+}
+
+float Game::GetParticlePoolUsage() const {
+    return static_cast<float>(activeParticleCount) / static_cast<float>(MAX_PARTICLES);
+}
+
+void Game::RunParticleStressTest() {
+    const Vector2 center = {400.0f, 300.0f};
+    const int requestedParticles = MAX_PARTICLES;
+    const int before = CountActiveParticles();
+    const double start = GetTime();
+    const int spawned = SpawnParticleBurst(center, GOLD, requestedParticles, 1.5f, 3.0f);
+    const double elapsedMs = (GetTime() - start) * 1000.0;
+
+    TraceLog(LOG_INFO,
+             "KEY_P stress test: before=%d requested=%d spawned=%d after=%d fps=%d frame_time=%.3f ms elapsed=%.3f ms",
+             before, requestedParticles, spawned, CountActiveParticles(), GetFPS(), GetFrameTime() * 1000.0f, elapsedMs);
 }
 
 std::string Game::BuildNetworkState() const {
