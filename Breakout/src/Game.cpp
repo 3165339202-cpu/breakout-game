@@ -9,6 +9,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <sys/stat.h>
+#include <cstdlib>
+#include <cstdio>
 #include "ExtendPaddleEffect.h"
 #include "MultiBallEffect.h"
 #include "SlowBallEffect.h"
@@ -17,8 +19,16 @@ using json = nlohmann::json;
 namespace {
 constexpr int kScreenWidth = 800;
 constexpr int kScreenHeight = 600;
+constexpr float kBrickStartX = 50.0f;
+constexpr float kBrickStartY = 80.0f;
+constexpr float kBrickWidth = 85.0f;
+constexpr float kBrickHeight = 25.0f;
+constexpr float kBrickStepX = 95.0f;
+constexpr float kBrickStepY = 35.0f;
+constexpr int kBrickColumns = 8;
+constexpr int kBrickRows = 13;
 constexpr const char* kSaveFile = "breakout_save.json";
-constexpr const char* kEditedLevelDir = "levels";
+constexpr const char* kEditedLevelDir = "edited_levels";
 
 bool SameColor(Color a, Color b) {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
@@ -26,6 +36,70 @@ bool SameColor(Color a, Color b) {
 
 void EnsureLevelDirectory() {
     mkdir(kEditedLevelDir, 0755);
+}
+
+
+void AddUtf8Codepoints(std::vector<int>& codepoints, const char* text) {
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(text);
+    while (*s) {
+        int codepoint = 0;
+        if ((*s & 0x80) == 0) {
+            codepoint = *s++;
+        } else if ((*s & 0xE0) == 0xC0 && s[1]) {
+            codepoint = ((*s & 0x1F) << 6) | (s[1] & 0x3F);
+            s += 2;
+        } else if ((*s & 0xF0) == 0xE0 && s[1] && s[2]) {
+            codepoint = ((*s & 0x0F) << 12) | ((s[1] & 0x3F) << 6) | (s[2] & 0x3F);
+            s += 3;
+        } else if ((*s & 0xF8) == 0xF0 && s[1] && s[2] && s[3]) {
+            codepoint = ((*s & 0x07) << 18) | ((s[1] & 0x3F) << 12) | ((s[2] & 0x3F) << 6) | (s[3] & 0x3F);
+            s += 4;
+        } else {
+            ++s;
+            continue;
+        }
+        codepoints.push_back(codepoint);
+    }
+}
+
+std::vector<int> BuildUICodepoints() {
+    std::vector<int> codepoints;
+    for (int c = 32; c <= 126; ++c) codepoints.push_back(c);
+
+    const char* uiTexts[] = {
+        "打砖块游戏", "发现存档：按 C 继续，按 N/空格 开新游戏", "按 空格 键开始单机游戏",
+        "关闭游戏会自动保存，下次启动按 C 继续",
+        "按 H 键创建局域网房间", "按 J 键加入 127.0.0.1 房间", "游戏中：F5存档  E编辑模式  L排行榜",
+        "配置文件错误，已使用默认配置: ", "未找到 config.json，已使用默认配置。", "已载入默认第 关布局。",
+        "关卡 JSON 缺失或格式错误: ", "无法打开关卡文件: ", "关卡缺少 bricks 数组: ", "关卡没有砖块: ",
+        "已载入第 关: ", "没有找到存档。", "已读取存档，继续第 关。", "存档格式错误，已忽略: ",
+        "当前布局已保存为 JSON。", "保存布局失败。", "已退出编辑模式。",
+        "编辑模式：左键添加/删除，1普通 2爆炸 3金砖，S保存，E退出。", "存档成功。", "存档失败。",
+        "单机模式", "局域网房主: 端口 45200，等待客户端", "局域网房主: 已连接 1 位客户端",
+        "客户端: 已连接到 127.0.0.1:45200", "创建房间失败，回退单机模式", "加入房间失败，回退单机模式",
+        "编辑模式", "左键对齐网格添加/删除", "1普通  2爆炸  3金砖", "S保存JSON  E退出", "画笔: 普通", "画笔: 爆炸", "画笔: 金砖"
+    };
+    for (const char* text : uiTexts) AddUtf8Codepoints(codepoints, text);
+
+    std::sort(codepoints.begin(), codepoints.end());
+    codepoints.erase(std::unique(codepoints.begin(), codepoints.end()), codepoints.end());
+    return codepoints;
+}
+
+void DrawUIText(Font font, bool useFont, const char* text, Vector2 pos, float fontSize, Color color) {
+    if (useFont) DrawTextEx(font, text, pos, fontSize, 1.0f, color);
+    else DrawText(text, static_cast<int>(pos.x), static_cast<int>(pos.y), static_cast<int>(fontSize), color);
+}
+
+void DrawCenteredUIText(Font font, bool useFont, const char* text, float centerX, float y, float fontSize, Color color) {
+    float width = useFont ? MeasureTextEx(font, text, fontSize, 1.0f).x : static_cast<float>(MeasureText(text, static_cast<int>(fontSize)));
+    DrawUIText(font, useFont, text, Vector2{centerX - width / 2.0f, y}, fontSize, color);
+}
+
+const char* BrickTypeDisplayName(BrickType type) {
+    if (type == EXPLOSIVE) return "爆炸";
+    if (type == GOLDEN) return "金砖";
+    return "普通";
 }
 }
 
@@ -174,7 +248,7 @@ void Game::LoadDefaultLevel(int levelNumber, const std::string& reason) {
             BrickType type = NORMAL;
             if (levelNumber >= 2 && (row + col) % 7 == 0) type = EXPLOSIVE;
             if (levelNumber >= 3 && (row * 3 + col) % 9 == 0) type = GOLDEN;
-            bricks.emplace_back(50 + col * 95, 80 + row * 35, 85, 25, colors[row % 5], type);
+            bricks.emplace_back(kBrickStartX + col * kBrickStepX, kBrickStartY + row * kBrickStepY, kBrickWidth, kBrickHeight, colors[row % 5], type);
         }
     }
     RecalculateWinCount();
@@ -197,8 +271,16 @@ bool Game::LoadLevel(int levelNumber) {
     }
 }
 
+std::string Game::GetSaveFilePath() const {
+    const char* appDir = GetApplicationDirectory();
+    if (appDir != nullptr && appDir[0] != '\0') {
+        return std::string(appDir) + kSaveFile;
+    }
+    return kSaveFile;
+}
+
 bool Game::SaveExists() const {
-    std::ifstream file(kSaveFile);
+    std::ifstream file(GetSaveFilePath());
     return file.good();
 }
 
@@ -207,6 +289,19 @@ bool Game::SaveGame() const {
     save["score"] = score;
     save["lives"] = lives;
     save["currentLevel"] = currentLevel;
+    save["gameTime"] = gameTime;
+    save["paddleX"] = paddle.GetX();
+    save["balls"] = json::array();
+    for (const auto& ball : balls) {
+        Vector2 pos = ball.GetPosition();
+        Vector2 speed = ball.GetSpeed();
+        save["balls"].push_back({
+            {"x", pos.x}, {"y", pos.y},
+            {"speedX", speed.x}, {"speedY", speed.y},
+            {"radius", ball.GetRadius()},
+            {"launched", ball.IsLaunched()}
+        });
+    }
     save["bricks"] = json::array();
     for (const auto& brick : bricks) {
         Rectangle r = brick.GetRect();
@@ -218,14 +313,14 @@ bool Game::SaveGame() const {
         });
     }
 
-    std::ofstream out(kSaveFile);
+    std::ofstream out(GetSaveFilePath());
     if (!out.is_open()) return false;
     out << save.dump(4);
     return true;
 }
 
 bool Game::LoadSaveGame() {
-    std::ifstream file(kSaveFile);
+    std::ifstream file(GetSaveFilePath());
     if (!file.is_open()) {
         statusMessage = "没有找到存档。";
         return false;
@@ -237,6 +332,7 @@ bool Game::LoadSaveGame() {
         score = save.at("score").get<int>();
         lives = save.at("lives").get<int>();
         currentLevel = save.at("currentLevel").get<int>();
+        gameTime = save.value("gameTime", 0.0f);
         LoadLevel(currentLevel);
 
         if (save.contains("bricks") && save["bricks"].is_array()) {
@@ -253,8 +349,22 @@ bool Game::LoadSaveGame() {
                 bricks.push_back(brick);
             }
         }
+
         ResetTransientObjects();
-        ResetBallAndPaddle();
+        paddle.SetX(save.value("paddleX", 340.0f));
+        if (save.contains("balls") && save["balls"].is_array()) {
+            for (const auto& item : save["balls"]) {
+                Ball ball(
+                    Vector2{item.value("x", 400.0f), item.value("y", 530.0f)},
+                    Vector2{item.value("speedX", 0.0f), item.value("speedY", 0.0f)},
+                    item.value("radius", 10.0f));
+                ball.SetLaunched(item.value("launched", false));
+                balls.push_back(ball);
+            }
+        }
+        if (balls.empty()) {
+            balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
+        }
         RecalculateWinCount();
         scoreSaved = false;
         loadedFromSave = true;
@@ -267,7 +377,7 @@ bool Game::LoadSaveGame() {
 }
 
 void Game::DeleteSave() const {
-    std::remove(kSaveFile);
+    std::remove(GetSaveFilePath().c_str());
 }
 
 void Game::LoadNextLevelOrWin() {
@@ -286,9 +396,7 @@ void Game::LoadNextLevelOrWin() {
 
 bool Game::SaveCurrentLayout() const {
     EnsureLevelDirectory();
-    std::string path = currentLevel <= static_cast<int>(levelFiles.size())
-        ? levelFiles[currentLevel - 1]
-        : "levels/level" + std::to_string(currentLevel) + ".json";
+    std::string path = std::string(kEditedLevelDir) + "/level" + std::to_string(currentLevel) + "_edited.json";
 
     json layout;
     layout["name"] = "Edited Level " + std::to_string(currentLevel);
@@ -316,21 +424,26 @@ void Game::HandleEditMode() {
 
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
         Vector2 mouse = GetMousePosition();
-        auto hit = std::find_if(bricks.begin(), bricks.end(), [mouse](const Brick& brick) {
-            return brick.IsActive() && CheckCollisionPointRec(mouse, brick.GetRect());
-        });
+        int col = static_cast<int>(std::floor((mouse.x - kBrickStartX) / kBrickStepX));
+        int row = static_cast<int>(std::floor((mouse.y - kBrickStartY) / kBrickStepY));
 
-        if (hit != bricks.end()) {
-            bricks.erase(hit);
-        } else if (mouse.y > 60 && mouse.y < 520) {
-            float width = 85;
-            float height = 25;
-            float x = std::max(5.0f, std::min(710.0f, std::floor((mouse.x - 50) / 95.0f) * 95.0f + 50));
-            float y = std::max(70.0f, std::min(500.0f, std::floor((mouse.y - 80) / 35.0f) * 35.0f + 80));
-            Color color = editBrushType == GOLDEN ? GOLD : (editBrushType == EXPLOSIVE ? RED : SKYBLUE);
-            bricks.emplace_back(x, y, width, height, color, editBrushType);
+        if (col >= 0 && col < kBrickColumns && row >= 0 && row < kBrickRows) {
+            float x = kBrickStartX + col * kBrickStepX;
+            float y = kBrickStartY + row * kBrickStepY;
+
+            auto sameCell = std::find_if(bricks.begin(), bricks.end(), [x, y](const Brick& brick) {
+                Rectangle r = brick.GetRect();
+                return brick.IsActive() && std::fabs(r.x - x) < 0.5f && std::fabs(r.y - y) < 0.5f;
+            });
+
+            if (sameCell != bricks.end()) {
+                bricks.erase(sameCell);
+            } else {
+                Color color = editBrushType == GOLDEN ? GOLD : (editBrushType == EXPLOSIVE ? RED : SKYBLUE);
+                bricks.emplace_back(x, y, kBrickWidth, kBrickHeight, color, editBrushType);
+            }
+            RecalculateWinCount();
         }
-        RecalculateWinCount();
     }
 
     if (IsKeyPressed(KEY_S)) {
@@ -338,7 +451,6 @@ void Game::HandleEditMode() {
     }
 
     if (IsKeyPressed(KEY_E)) {
-        SaveCurrentLayout();
         currentState = GameState::PLAYING;
         statusMessage = "已退出编辑模式。";
     }
@@ -365,19 +477,7 @@ void Game::Init() {
     remoteMoveRight = false;
 
     if (!hasChineseFont) {
-        const int chineseCodepoints[] = {
-            25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
-            21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475, 32487, 23384, 26723, 20851, 21345,
-            24320, 22987, 32534, 36753, 20445, 23384, 35835, 26723, 20851
-        };
-
-        std::vector<int> codepoints;
-        codepoints.reserve(95 + (sizeof(chineseCodepoints) / sizeof(chineseCodepoints[0])));
-        for (int c = 32; c <= 126; ++c) codepoints.push_back(c);
-        for (int c : chineseCodepoints) codepoints.push_back(c);
-
+        std::vector<int> codepoints = BuildUICodepoints();
         const char* fontCandidates[] = {
             "fonts/NotoSansSC.otf",
             "../fonts/NotoSansSC.otf",
@@ -671,6 +771,10 @@ void Game::Update() {
 }
 
 void Game::Shutdown() {
+    if (currentState == GameState::PLAYING || currentState == GameState::PAUSED || currentState == GameState::EDITING) {
+        SaveGame();
+    }
+
     if (hasChineseFont && uiFont.texture.id > 0) UnloadFont(uiFont);
     hasChineseFont = false;
 }
@@ -682,19 +786,21 @@ void Game::Draw() {
     switch (currentState) {
     case GameState::MENU:
         if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 165}, 44, 1, WHITE);
-            DrawTextEx(uiFont, saveAvailable ? "发现存档：按 C 继续，按 N/空格 开新游戏" : "按 空格 键开始单机游戏", Vector2{120, 250}, 25, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 310}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 350}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "游戏中：F5存档  E编辑模式  L排行榜", Vector2{135, 390}, 24, 1, YELLOW);
+            DrawCenteredUIText(uiFont, true, "打砖块游戏", kScreenWidth / 2.0f, 165, 44, WHITE);
+            DrawCenteredUIText(uiFont, true, saveAvailable ? "发现存档：按 C 继续，按 N/空格 开新游戏" : "按 空格 键开始单机游戏", kScreenWidth / 2.0f, 250, 25, GREEN);
+            DrawCenteredUIText(uiFont, true, "按 H 键创建局域网房间", kScreenWidth / 2.0f, 310, 28, SKYBLUE);
+            DrawCenteredUIText(uiFont, true, "按 J 键加入 127.0.0.1 房间", kScreenWidth / 2.0f, 350, 28, SKYBLUE);
+            DrawCenteredUIText(uiFont, true, "游戏中：F5存档  E编辑模式  L排行榜", kScreenWidth / 2.0f, 390, 24, YELLOW);
+            DrawCenteredUIText(uiFont, true, "关闭游戏会自动保存，下次启动按 C 继续", kScreenWidth / 2.0f, 430, 22, ORANGE);
         } else {
-            DrawText("BREAKOUT GAME", 260, 165, 30, WHITE);
-            DrawText(saveAvailable ? "Save found: C Continue, N/SPACE New Game" : "Press SPACE to Start (Offline)", 125, 250, 20, GREEN);
-            DrawText("Press H to Host LAN", 260, 310, 20, SKYBLUE);
-            DrawText("Press J to Join LAN (127.0.0.1)", 180, 350, 20, SKYBLUE);
-            DrawText("In game: F5 Save, E Edit Mode, L Leaderboard", 135, 390, 18, YELLOW);
+            DrawCenteredUIText(uiFont, false, "BREAKOUT GAME", kScreenWidth / 2.0f, 165, 30, WHITE);
+            DrawCenteredUIText(uiFont, false, saveAvailable ? "Save found: C Continue, N/SPACE New Game" : "Press SPACE to Start (Offline)", kScreenWidth / 2.0f, 250, 20, GREEN);
+            DrawCenteredUIText(uiFont, false, "Press H to Host LAN", kScreenWidth / 2.0f, 310, 20, SKYBLUE);
+            DrawCenteredUIText(uiFont, false, "Press J to Join LAN (127.0.0.1)", kScreenWidth / 2.0f, 350, 20, SKYBLUE);
+            DrawCenteredUIText(uiFont, false, "In game: F5 Save, E Edit Mode, L Leaderboard", kScreenWidth / 2.0f, 390, 18, YELLOW);
+            DrawCenteredUIText(uiFont, false, "The game auto-saves on close; press C next time to continue", kScreenWidth / 2.0f, 430, 18, ORANGE);
         }
-        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 550, 16, ORANGE);
+        if (!statusMessage.empty()) DrawUIText(uiFont, hasChineseFont, statusMessage.c_str(), Vector2{20, 550}, 16, ORANGE);
         break;
 
     case GameState::PLAYING:
@@ -708,15 +814,17 @@ void Game::Draw() {
         DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
         DrawText(TextFormat("Level: %d/%d", currentLevel, static_cast<int>(levelFiles.size())), 350, 20, 20, WHITE);
-        if (hasChineseFont) DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
-        else DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+        DrawUIText(uiFont, hasChineseFont, networkHint.c_str(), Vector2{20, 50}, 22, SKYBLUE);
         DrawText("F5 Save | E Edit", 590, 50, 16, LIGHTGRAY);
         if (currentState == GameState::EDITING) {
-            DrawRectangle(0, 0, kScreenWidth, 70, Fade(DARKBLUE, 0.85f));
-            DrawText("EDIT MODE: Left click add/delete | 1 Normal 2 Explosive 3 Golden | S Save JSON | E Exit", 20, 20, 18, WHITE);
-            DrawText(TextFormat("Brush: %s", BrickTypeToName(editBrushType).c_str()), 20, 45, 18, YELLOW);
+            DrawRectangle(0, 0, kScreenWidth, 76, Fade(DARKBLUE, 0.85f));
+            DrawUIText(uiFont, hasChineseFont, "编辑模式", Vector2{20, 14}, 23, WHITE);
+            DrawUIText(uiFont, hasChineseFont, "左键对齐网格添加/删除", Vector2{125, 16}, 19, WHITE);
+            DrawUIText(uiFont, hasChineseFont, "1普通  2爆炸  3金砖", Vector2{365, 16}, 19, WHITE);
+            DrawUIText(uiFont, hasChineseFont, "S保存JSON  E退出", Vector2{590, 16}, 19, WHITE);
+            DrawUIText(uiFont, hasChineseFont, TextFormat("画笔: %s", BrickTypeDisplayName(editBrushType)), Vector2{20, 47}, 20, YELLOW);
         }
-        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 575, 16, ORANGE);
+        if (!statusMessage.empty()) DrawUIText(uiFont, hasChineseFont, statusMessage.c_str(), Vector2{20, 575}, 16, ORANGE);
         break;
 
     case GameState::PAUSED:
@@ -727,7 +835,7 @@ void Game::Draw() {
         for (auto& pu : powerUps) pu.Draw();
         DrawText("PAUSED", 350, 285, 30, YELLOW);
         DrawText("P Resume | F5 Save", 300, 330, 20, WHITE);
-        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 575, 16, ORANGE);
+        if (!statusMessage.empty()) DrawUIText(uiFont, hasChineseFont, statusMessage.c_str(), Vector2{20, 575}, 16, ORANGE);
         break;
 
     case GameState::GAMEOVER:

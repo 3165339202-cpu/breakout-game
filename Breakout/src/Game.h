@@ -80,6 +80,7 @@ private:
     bool LoadLevelFromFile(const std::string& path);
     void LoadDefaultLevel(int levelNumber, const std::string& reason);
     void RecalculateWinCount();
+    std::string GetSaveFilePath() const;
     bool SaveGame() const;
     bool LoadSaveGame();
     bool SaveExists() const;
