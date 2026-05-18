@@ -45,3 +45,9 @@ void Paddle::Update(float dt) {
         }
     }
 }
+
+void Paddle::Reset(float x, float y) {
+    position = {x, y};
+    width = originalWidth;
+    effectTimer = 0.0f;
+}

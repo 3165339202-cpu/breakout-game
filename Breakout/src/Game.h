@@ -38,6 +38,7 @@ private:
     //Ball ball;
     Paddle paddle;
     std::vector<Brick> bricks;
+    std::vector<Brick> defaultBricks;
 
     int score;
     int lives;
@@ -62,9 +63,14 @@ private:
 
     Font uiFont;
     bool hasChineseFont;
+    bool levelEditorEnabled;
 
     std::string BuildNetworkState() const;
     void ApplyNetworkState(const std::string& state);
+    void BuildDefaultBricks();
+    void ResetLevelToDefault();
+    void ResetGameSession();
+    void HandleLevelEditorInput();
 
 public:
     Game();
