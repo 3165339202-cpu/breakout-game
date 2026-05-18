@@ -19,7 +19,8 @@ public:
     void MoveRight(float speed);
     void Draw();
     void Extend(float extraWidth, float duration);
-    void Update(float dt); 
+    void Update(float dt);
+    void Reset(float x, float y);
 
     Rectangle GetRect() const {
         return { position.x, position.y, width, height };

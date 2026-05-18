@@ -12,6 +12,36 @@
 #include "SlowBallEffect.h"
 using json = nlohmann::json;
 
+namespace {
+constexpr int kScreenWidth = 800;
+constexpr float kBrickStartX = 50.0f;
+constexpr float kBrickStartY = 80.0f;
+constexpr float kBrickStepX = 95.0f;
+constexpr float kBrickStepY = 35.0f;
+constexpr float kBrickWidth = 85.0f;
+constexpr float kBrickHeight = 25.0f;
+constexpr int kBrickColumns = 8;
+constexpr int kBrickRows = 5;
+
+const char* const kChineseUiText =
+    "打砖块游戏按空格键开始单机游戏按H键创建局域网房间按J键加入127.0.0.1房间"
+    "房主方向键客户端按L查看排行榜单机模式创建房间失败加入房间失败回退"
+    "已连接到端口等待客户端关卡编辑模式左键放置右键删除E退出新游戏会恢复默认布局:，./";
+
+void DrawCenteredText(Font font, const char* text, float y, float fontSize, Color color) {
+    Vector2 size = MeasureTextEx(font, text, fontSize, 1.0f);
+    DrawTextEx(font, text, Vector2{(kScreenWidth - size.x) / 2.0f, y}, fontSize, 1.0f, color);
+}
+
+int CountActiveBricks(const std::vector<Brick>& bricks) {
+    int count = 0;
+    for (const Brick& brick : bricks) {
+        if (brick.IsActive()) ++count;
+    }
+    return count;
+}
+}
+
 Game::Game()
     : paddle(340, 550, 120, 15),
       leaderboard("scores.txt"),
@@ -20,7 +50,8 @@ Game::Game()
       remoteMoveRight(false),
       networkHint("单机模式"),
       uiFont{},
-      hasChineseFont(false) {}
+      hasChineseFont(false),
+      levelEditorEnabled(false) {}
 
 void Game::Init() {
     std::ifstream configFile("config.json");
@@ -43,21 +74,21 @@ void Game::Init() {
     remoteMoveRight = false;
 
     if (!hasChineseFont) {
-        const int chineseCodepoints[] = {
-            25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
-            21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475
-        };
+        int textCodepointCount = 0;
+        int* textCodepoints = LoadCodepoints(kChineseUiText, &textCodepointCount);
 
         std::vector<int> codepoints;
-        codepoints.reserve(95 + (sizeof(chineseCodepoints) / sizeof(chineseCodepoints[0])));
+        codepoints.reserve(95 + textCodepointCount);
         for (int c = 32; c <= 126; ++c) {
-            codepoints.push_back(c); // ASCII for H/J/L/A/D and symbols
-        }
-        for (int c : chineseCodepoints) {
             codepoints.push_back(c);
         }
+        for (int i = 0; i < textCodepointCount; ++i) {
+            codepoints.push_back(textCodepoints[i]);
+        }
+        UnloadCodepoints(textCodepoints);
+
+        std::sort(codepoints.begin(), codepoints.end());
+        codepoints.erase(std::unique(codepoints.begin(), codepoints.end()), codepoints.end());
 
         const char* fontCandidates[] = {
             "fonts/NotoSansSC.otf",
@@ -66,7 +97,7 @@ void Game::Init() {
         };
         for (const char* path : fontCandidates) {
             if (FileExists(path)) {
-                uiFont = LoadFontEx(path, 32, codepoints.data(), static_cast<int>(codepoints.size()));
+                uiFont = LoadFontEx(path, 48, codepoints.data(), static_cast<int>(codepoints.size()));
                 if (uiFont.texture.id > 0) {
                     hasChineseFont = true;
                     break;
@@ -75,30 +106,96 @@ void Game::Init() {
         }
     }
 
-    bricks.clear();
+    BuildDefaultBricks();
+    ResetLevelToDefault();
+}
 
+
+void Game::BuildDefaultBricks() {
+    defaultBricks.clear();
     Color colors[] = {RED, ORANGE, YELLOW, GREEN, BLUE};
 
-    for (int row = 0; row < 5; row++) {
-        for (int col = 0; col < 8; col++) {
+    for (int row = 0; row < kBrickRows; row++) {
+        for (int col = 0; col < kBrickColumns; col++) {
             int randType = rand() % 10;
 
             BrickType type = NORMAL;
             if (randType == 0) type = EXPLOSIVE;
             else if (randType == 1) type = GOLDEN;
 
-            bricks.emplace_back(
-                50 + col * 95,
-                80 + row * 35,
-                85,
-                25,
+            defaultBricks.emplace_back(
+                kBrickStartX + col * kBrickStepX,
+                kBrickStartY + row * kBrickStepY,
+                kBrickWidth,
+                kBrickHeight,
                 colors[row],
                 type
             );
         }
     }
+}
 
-    winCount = bricks.size();
+void Game::ResetLevelToDefault() {
+    bricks = defaultBricks;
+    winCount = CountActiveBricks(bricks);
+    levelEditorEnabled = false;
+}
+
+void Game::ResetGameSession() {
+    score = 0;
+    lives = 3;
+    gameTime = 0.0f;
+    scoreSaved = false;
+    remoteMoveLeft = false;
+    remoteMoveRight = false;
+    paddle.Reset(340, 550);
+    balls.clear();
+    balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
+    particles.clear();
+    powerUps.clear();
+    activeEffects.clear();
+    ResetLevelToDefault();
+}
+
+void Game::HandleLevelEditorInput() {
+    if (IsKeyPressed(KEY_E)) {
+        levelEditorEnabled = !levelEditorEnabled;
+    }
+
+    if (!levelEditorEnabled) return;
+
+    if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
+        return;
+    }
+
+    Vector2 mouse = GetMousePosition();
+    int col = static_cast<int>(std::round((mouse.x - kBrickStartX) / kBrickStepX));
+    int row = static_cast<int>(std::round((mouse.y - kBrickStartY) / kBrickStepY));
+
+    if (col < 0 || col >= kBrickColumns || row < 0 || row >= kBrickRows) {
+        return;
+    }
+
+    float x = kBrickStartX + col * kBrickStepX;
+    float y = kBrickStartY + row * kBrickStepY;
+
+    auto it = std::find_if(bricks.begin(), bricks.end(), [x, y](const Brick& brick) {
+        Rectangle r = brick.GetRect();
+        return std::fabs(r.x - x) < 0.5f && std::fabs(r.y - y) < 0.5f;
+    });
+
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        if (it != bricks.end()) {
+            it->SetActive(true);
+        } else {
+            Color colors[] = {RED, ORANGE, YELLOW, GREEN, BLUE};
+            bricks.emplace_back(x, y, kBrickWidth, kBrickHeight, colors[row], NORMAL);
+        }
+    } else if (it != bricks.end()) {
+        it->SetActive(false);
+    }
+
+    winCount = CountActiveBricks(bricks);
 }
 
 void Game::AddBall(const Ball& newBall) {
@@ -126,6 +223,7 @@ void Game::Update() {
             networkSession.Shutdown();
             networkRole = NetworkRole::OFFLINE;
             networkHint = "单机模式";
+            ResetGameSession();
             currentState = GameState::PLAYING;
         }
         if (IsKeyPressed(KEY_H)) {
@@ -133,6 +231,7 @@ void Game::Update() {
             if (networkSession.StartHost(45200)) {
                 networkRole = NetworkRole::HOST;
                 networkHint = "局域网房主: 端口 45200，等待客户端";
+                ResetGameSession();
                 currentState = GameState::PLAYING;
             } else {
                 networkRole = NetworkRole::OFFLINE;
@@ -144,6 +243,7 @@ void Game::Update() {
             if (networkSession.StartClient("127.0.0.1", 45200)) {
                 networkRole = NetworkRole::CLIENT;
                 networkHint = "客户端: 已连接到 127.0.0.1:45200";
+                ResetGameSession();
                 currentState = GameState::PLAYING;
             } else {
                 networkRole = NetworkRole::OFFLINE;
@@ -157,6 +257,8 @@ void Game::Update() {
             currentState = GameState::PAUSED;
             break;
         }
+
+        HandleLevelEditorInput();
 
         float dt = GetFrameTime();
 
@@ -363,7 +465,7 @@ void Game::Update() {
         }
 
         if (IsKeyPressed(KEY_R)) {
-            Init();
+            ResetGameSession();
             currentState = GameState::PLAYING;
         }
         break;
@@ -374,7 +476,7 @@ void Game::Update() {
             scoreSaved = true;
         }
         if (IsKeyPressed(KEY_R)) {
-            Init();
+            ResetGameSession();
             currentState = GameState::PLAYING;
         }
         break;
@@ -409,12 +511,12 @@ void Game::Draw() {
     switch (currentState) {
     case GameState::MENU:
         if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 200}, 44, 1, WHITE);
-            DrawTextEx(uiFont, "按 空格 键开始单机游戏", Vector2{190, 285}, 28, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 325}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 365}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "房主: 方向键+空格  客户端: A/D", Vector2{145, 405}, 24, 1, LIGHTGRAY);
-            DrawTextEx(uiFont, "按 L 键查看排行榜", Vector2{230, 445}, 28, 1, YELLOW);
+            DrawCenteredText(uiFont, "打砖块游戏", 190, 44, WHITE);
+            DrawCenteredText(uiFont, "按 空格 键开始单机游戏", 285, 28, GREEN);
+            DrawCenteredText(uiFont, "按 H 键创建局域网房间", 325, 28, SKYBLUE);
+            DrawCenteredText(uiFont, "按 J 键加入 127.0.0.1 房间", 365, 28, SKYBLUE);
+            DrawCenteredText(uiFont, "房主: 方向键+空格  客户端: A/D", 405, 24, LIGHTGRAY);
+            DrawCenteredText(uiFont, "按 L 键查看排行榜", 445, 28, YELLOW);
         } else {
             DrawText("BREAKOUT GAME", 260, 200, 30, WHITE);
             DrawText("Press SPACE to Start (Offline)", 210, 290, 20, GREEN);
@@ -436,8 +538,16 @@ void Game::Draw() {
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
         if (hasChineseFont) {
             DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
+            DrawTextEx(uiFont, "按 E 编辑关卡", Vector2{20, 76}, 22, 1, LIGHTGRAY);
+            if (levelEditorEnabled) {
+                DrawTextEx(uiFont, "关卡编辑模式: 左键放置  右键删除  新游戏恢复默认", Vector2{135, 560}, 22, 1, YELLOW);
+            }
         } else {
             DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+            DrawText("Press E: Edit level", 20, 76, 18, LIGHTGRAY);
+            if (levelEditorEnabled) {
+                DrawText("LEVEL EDITOR: Left add, right delete. New game resets defaults.", 110, 560, 18, YELLOW);
+            }
         }
         break;
 
