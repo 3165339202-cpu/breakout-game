@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <sys/stat.h>
 #include <cstdlib>
+#include <cstdio>
 #include "ExtendPaddleEffect.h"
 #include "MultiBallEffect.h"
 #include "SlowBallEffect.h"
@@ -67,6 +68,7 @@ std::vector<int> BuildUICodepoints() {
 
     const char* uiTexts[] = {
         "打砖块游戏", "发现存档：按 C 继续，按 N/空格 开新游戏", "按 空格 键开始单机游戏",
+        "关闭游戏会自动保存，下次启动按 C 继续",
         "按 H 键创建局域网房间", "按 J 键加入 127.0.0.1 房间", "游戏中：F5存档  E编辑模式  L排行榜",
         "配置文件错误，已使用默认配置: ", "未找到 config.json，已使用默认配置。", "已载入默认第 关布局。",
         "关卡 JSON 缺失或格式错误: ", "无法打开关卡文件: ", "关卡缺少 bricks 数组: ", "关卡没有砖块: ",
@@ -269,8 +271,16 @@ bool Game::LoadLevel(int levelNumber) {
     }
 }
 
+std::string Game::GetSaveFilePath() const {
+    const char* appDir = GetApplicationDirectory();
+    if (appDir != nullptr && appDir[0] != '\0') {
+        return std::string(appDir) + kSaveFile;
+    }
+    return kSaveFile;
+}
+
 bool Game::SaveExists() const {
-    std::ifstream file(kSaveFile);
+    std::ifstream file(GetSaveFilePath());
     return file.good();
 }
 
@@ -279,6 +289,19 @@ bool Game::SaveGame() const {
     save["score"] = score;
     save["lives"] = lives;
     save["currentLevel"] = currentLevel;
+    save["gameTime"] = gameTime;
+    save["paddleX"] = paddle.GetX();
+    save["balls"] = json::array();
+    for (const auto& ball : balls) {
+        Vector2 pos = ball.GetPosition();
+        Vector2 speed = ball.GetSpeed();
+        save["balls"].push_back({
+            {"x", pos.x}, {"y", pos.y},
+            {"speedX", speed.x}, {"speedY", speed.y},
+            {"radius", ball.GetRadius()},
+            {"launched", ball.IsLaunched()}
+        });
+    }
     save["bricks"] = json::array();
     for (const auto& brick : bricks) {
         Rectangle r = brick.GetRect();
@@ -290,14 +313,14 @@ bool Game::SaveGame() const {
         });
     }
 
-    std::ofstream out(kSaveFile);
+    std::ofstream out(GetSaveFilePath());
     if (!out.is_open()) return false;
     out << save.dump(4);
     return true;
 }
 
 bool Game::LoadSaveGame() {
-    std::ifstream file(kSaveFile);
+    std::ifstream file(GetSaveFilePath());
     if (!file.is_open()) {
         statusMessage = "没有找到存档。";
         return false;
@@ -309,6 +332,7 @@ bool Game::LoadSaveGame() {
         score = save.at("score").get<int>();
         lives = save.at("lives").get<int>();
         currentLevel = save.at("currentLevel").get<int>();
+        gameTime = save.value("gameTime", 0.0f);
         LoadLevel(currentLevel);
 
         if (save.contains("bricks") && save["bricks"].is_array()) {
@@ -325,8 +349,22 @@ bool Game::LoadSaveGame() {
                 bricks.push_back(brick);
             }
         }
+
         ResetTransientObjects();
-        ResetBallAndPaddle();
+        paddle.SetX(save.value("paddleX", 340.0f));
+        if (save.contains("balls") && save["balls"].is_array()) {
+            for (const auto& item : save["balls"]) {
+                Ball ball(
+                    Vector2{item.value("x", 400.0f), item.value("y", 530.0f)},
+                    Vector2{item.value("speedX", 0.0f), item.value("speedY", 0.0f)},
+                    item.value("radius", 10.0f));
+                ball.SetLaunched(item.value("launched", false));
+                balls.push_back(ball);
+            }
+        }
+        if (balls.empty()) {
+            balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
+        }
         RecalculateWinCount();
         scoreSaved = false;
         loadedFromSave = true;
@@ -339,7 +377,7 @@ bool Game::LoadSaveGame() {
 }
 
 void Game::DeleteSave() const {
-    std::remove(kSaveFile);
+    std::remove(GetSaveFilePath().c_str());
 }
 
 void Game::LoadNextLevelOrWin() {
@@ -733,6 +771,10 @@ void Game::Update() {
 }
 
 void Game::Shutdown() {
+    if (currentState == GameState::PLAYING || currentState == GameState::PAUSED || currentState == GameState::EDITING) {
+        SaveGame();
+    }
+
     if (hasChineseFont && uiFont.texture.id > 0) UnloadFont(uiFont);
     hasChineseFont = false;
 }
@@ -749,12 +791,14 @@ void Game::Draw() {
             DrawCenteredUIText(uiFont, true, "按 H 键创建局域网房间", kScreenWidth / 2.0f, 310, 28, SKYBLUE);
             DrawCenteredUIText(uiFont, true, "按 J 键加入 127.0.0.1 房间", kScreenWidth / 2.0f, 350, 28, SKYBLUE);
             DrawCenteredUIText(uiFont, true, "游戏中：F5存档  E编辑模式  L排行榜", kScreenWidth / 2.0f, 390, 24, YELLOW);
+            DrawCenteredUIText(uiFont, true, "关闭游戏会自动保存，下次启动按 C 继续", kScreenWidth / 2.0f, 430, 22, ORANGE);
         } else {
             DrawCenteredUIText(uiFont, false, "BREAKOUT GAME", kScreenWidth / 2.0f, 165, 30, WHITE);
             DrawCenteredUIText(uiFont, false, saveAvailable ? "Save found: C Continue, N/SPACE New Game" : "Press SPACE to Start (Offline)", kScreenWidth / 2.0f, 250, 20, GREEN);
             DrawCenteredUIText(uiFont, false, "Press H to Host LAN", kScreenWidth / 2.0f, 310, 20, SKYBLUE);
             DrawCenteredUIText(uiFont, false, "Press J to Join LAN (127.0.0.1)", kScreenWidth / 2.0f, 350, 20, SKYBLUE);
             DrawCenteredUIText(uiFont, false, "In game: F5 Save, E Edit Mode, L Leaderboard", kScreenWidth / 2.0f, 390, 18, YELLOW);
+            DrawCenteredUIText(uiFont, false, "The game auto-saves on close; press C next time to continue", kScreenWidth / 2.0f, 430, 18, ORANGE);
         }
         if (!statusMessage.empty()) DrawUIText(uiFont, hasChineseFont, statusMessage.c_str(), Vector2{20, 550}, 16, ORANGE);
         break;
