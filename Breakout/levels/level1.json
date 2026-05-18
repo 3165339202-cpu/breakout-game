@@ -1,0 +1,261 @@
+{
+    "name": "Classic Wall",
+    "bricks": [
+        {
+            "x": 50,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 80,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 50,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 115,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 50,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 150,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 50,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 185,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        }
+    ]
+}

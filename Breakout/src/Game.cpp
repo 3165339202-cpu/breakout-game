@@ -7,33 +7,355 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
+#include <sys/stat.h>
 #include "ExtendPaddleEffect.h"
 #include "MultiBallEffect.h"
 #include "SlowBallEffect.h"
 using json = nlohmann::json;
 
+namespace {
+constexpr int kScreenWidth = 800;
+constexpr int kScreenHeight = 600;
+constexpr const char* kSaveFile = "breakout_save.json";
+constexpr const char* kEditedLevelDir = "levels";
+
+bool SameColor(Color a, Color b) {
+    return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+void EnsureLevelDirectory() {
+    mkdir(kEditedLevelDir, 0755);
+}
+}
+
 Game::Game()
     : paddle(340, 550, 120, 15),
+      score(0),
+      lives(3),
+      currentLevel(1),
+      winCount(0),
+      scoreSaved(false),
+      gameTime(0.0f),
       leaderboard("scores.txt"),
       networkRole(NetworkRole::OFFLINE),
       remoteMoveLeft(false),
       remoteMoveRight(false),
       networkHint("单机模式"),
       uiFont{},
-      hasChineseFont(false) {}
+      hasChineseFont(false),
+      levelFiles({"levels/level1.json", "levels/level2.json", "levels/level3.json"}),
+      statusMessage(""),
+      saveAvailable(false),
+      loadedFromSave(false),
+      editBrushType(NORMAL) {}
 
-void Game::Init() {
-    std::ifstream configFile("config.json");
-    if (configFile.is_open()) {
-        configFile >> config;
+void Game::LoadConfig() {
+    config = {
+        {"powerups", {
+            {"paddle_extend", {{"extra_width", 40}, {"duration", 5.0}, {"drop_rate", 0.3}}},
+            {"multi_ball", {{"extra_balls", 2}, {"duration", 0.0}, {"drop_rate", 0.2}}},
+            {"slow_ball", {{"speed_factor", 0.7}, {"duration", 5.0}, {"drop_rate", 0.25}}}
+        }}
+    };
+
+    const char* candidates[] = {"config.json", "../src/config.json", "Breakout/src/config.json"};
+    for (const char* path : candidates) {
+        std::ifstream file(path);
+        if (!file.is_open()) continue;
+        try {
+            json loaded;
+            file >> loaded;
+            if (!loaded.contains("powerups") || !loaded["powerups"].is_object()) {
+                throw std::runtime_error("missing powerups object");
+            }
+            config.merge_patch(loaded);
+            return;
+        } catch (const std::exception& e) {
+            statusMessage = std::string("配置文件错误，已使用默认配置: ") + e.what();
+            return;
+        }
     }
-    score = 0;
-    lives = 3;
-    gameTime = 0.0f;
-    scoreSaved = false;
-    currentState = GameState::MENU;
+    statusMessage = "未找到 config.json，已使用默认配置。";
+}
+
+void Game::ResetTransientObjects() {
+    balls.clear();
+    particles.clear();
+    powerUps.clear();
+    activeEffects.clear();
+}
+
+void Game::ResetBallAndPaddle() {
+    paddle.SetX(340);
     balls.clear();
     balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
+}
+
+Color Game::ColorFromName(const std::string& name) const {
+    if (name == "red") return RED;
+    if (name == "orange") return ORANGE;
+    if (name == "yellow") return YELLOW;
+    if (name == "green") return GREEN;
+    if (name == "blue") return BLUE;
+    if (name == "purple") return PURPLE;
+    if (name == "gold") return GOLD;
+    if (name == "pink") return PINK;
+    return LIGHTGRAY;
+}
+
+std::string Game::ColorToName(Color color) const {
+    if (SameColor(color, RED)) return "red";
+    if (SameColor(color, ORANGE)) return "orange";
+    if (SameColor(color, YELLOW)) return "yellow";
+    if (SameColor(color, GREEN)) return "green";
+    if (SameColor(color, BLUE)) return "blue";
+    if (SameColor(color, PURPLE)) return "purple";
+    if (SameColor(color, GOLD)) return "gold";
+    if (SameColor(color, PINK)) return "pink";
+    return "lightgray";
+}
+
+BrickType Game::BrickTypeFromName(const std::string& name) const {
+    if (name == "explosive") return EXPLOSIVE;
+    if (name == "golden") return GOLDEN;
+    return NORMAL;
+}
+
+std::string Game::BrickTypeToName(BrickType type) const {
+    if (type == EXPLOSIVE) return "explosive";
+    if (type == GOLDEN) return "golden";
+    return "normal";
+}
+
+void Game::RecalculateWinCount() {
+    winCount = 0;
+    for (const auto& brick : bricks) {
+        if (brick.IsActive()) winCount++;
+    }
+}
+
+bool Game::LoadLevelFromFile(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("无法打开关卡文件: " + path);
+    }
+
+    json level;
+    file >> level;
+    if (!level.contains("bricks") || !level["bricks"].is_array()) {
+        throw std::runtime_error("关卡缺少 bricks 数组: " + path);
+    }
+
+    bricks.clear();
+    for (const auto& item : level["bricks"]) {
+        float x = item.at("x").get<float>();
+        float y = item.at("y").get<float>();
+        float width = item.value("width", 85.0f);
+        float height = item.value("height", 25.0f);
+        std::string colorName = item.value("color", "lightgray");
+        std::string typeName = item.value("type", "normal");
+        bricks.emplace_back(x, y, width, height, ColorFromName(colorName), BrickTypeFromName(typeName));
+    }
+
+    if (bricks.empty()) {
+        throw std::runtime_error("关卡没有砖块: " + path);
+    }
+    RecalculateWinCount();
+    return true;
+}
+
+void Game::LoadDefaultLevel(int levelNumber, const std::string& reason) {
+    bricks.clear();
+    Color colors[] = {RED, ORANGE, YELLOW, GREEN, BLUE};
+    int rows = 3 + std::min(levelNumber, 3);
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < 8; col++) {
+            BrickType type = NORMAL;
+            if (levelNumber >= 2 && (row + col) % 7 == 0) type = EXPLOSIVE;
+            if (levelNumber >= 3 && (row * 3 + col) % 9 == 0) type = GOLDEN;
+            bricks.emplace_back(50 + col * 95, 80 + row * 35, 85, 25, colors[row % 5], type);
+        }
+    }
+    RecalculateWinCount();
+    statusMessage = reason + " 已载入默认第 " + std::to_string(levelNumber) + " 关布局。";
+}
+
+bool Game::LoadLevel(int levelNumber) {
+    currentLevel = std::max(1, levelNumber);
+    std::string path = currentLevel <= static_cast<int>(levelFiles.size())
+        ? levelFiles[currentLevel - 1]
+        : levelFiles.back();
+
+    try {
+        LoadLevelFromFile(path);
+        statusMessage = "已载入第 " + std::to_string(currentLevel) + " 关: " + path;
+        return true;
+    } catch (const std::exception& e) {
+        LoadDefaultLevel(currentLevel, std::string("关卡 JSON 缺失或格式错误: ") + e.what());
+        return false;
+    }
+}
+
+bool Game::SaveExists() const {
+    std::ifstream file(kSaveFile);
+    return file.good();
+}
+
+bool Game::SaveGame() const {
+    json save;
+    save["score"] = score;
+    save["lives"] = lives;
+    save["currentLevel"] = currentLevel;
+    save["bricks"] = json::array();
+    for (const auto& brick : bricks) {
+        Rectangle r = brick.GetRect();
+        save["bricks"].push_back({
+            {"x", r.x}, {"y", r.y}, {"width", r.width}, {"height", r.height},
+            {"color", ColorToName(brick.GetColor())},
+            {"type", BrickTypeToName(brick.GetType())},
+            {"active", brick.IsActive()}
+        });
+    }
+
+    std::ofstream out(kSaveFile);
+    if (!out.is_open()) return false;
+    out << save.dump(4);
+    return true;
+}
+
+bool Game::LoadSaveGame() {
+    std::ifstream file(kSaveFile);
+    if (!file.is_open()) {
+        statusMessage = "没有找到存档。";
+        return false;
+    }
+
+    try {
+        json save;
+        file >> save;
+        score = save.at("score").get<int>();
+        lives = save.at("lives").get<int>();
+        currentLevel = save.at("currentLevel").get<int>();
+        LoadLevel(currentLevel);
+
+        if (save.contains("bricks") && save["bricks"].is_array()) {
+            bricks.clear();
+            for (const auto& item : save["bricks"]) {
+                float x = item.at("x").get<float>();
+                float y = item.at("y").get<float>();
+                float width = item.value("width", 85.0f);
+                float height = item.value("height", 25.0f);
+                Brick brick(x, y, width, height,
+                           ColorFromName(item.value("color", "lightgray")),
+                           BrickTypeFromName(item.value("type", "normal")));
+                brick.SetActive(item.value("active", true));
+                bricks.push_back(brick);
+            }
+        }
+        ResetTransientObjects();
+        ResetBallAndPaddle();
+        RecalculateWinCount();
+        scoreSaved = false;
+        loadedFromSave = true;
+        statusMessage = "已读取存档，继续第 " + std::to_string(currentLevel) + " 关。";
+        return true;
+    } catch (const std::exception& e) {
+        statusMessage = std::string("存档格式错误，已忽略: ") + e.what();
+        return false;
+    }
+}
+
+void Game::DeleteSave() const {
+    std::remove(kSaveFile);
+}
+
+void Game::LoadNextLevelOrWin() {
+    currentLevel++;
+    if (currentLevel > static_cast<int>(levelFiles.size())) {
+        currentState = GameState::VICTORY;
+        DeleteSave();
+        return;
+    }
+    ResetTransientObjects();
+    ResetBallAndPaddle();
+    LoadLevel(currentLevel);
+    SaveGame();
+    currentState = GameState::PLAYING;
+}
+
+bool Game::SaveCurrentLayout() const {
+    EnsureLevelDirectory();
+    std::string path = currentLevel <= static_cast<int>(levelFiles.size())
+        ? levelFiles[currentLevel - 1]
+        : "levels/level" + std::to_string(currentLevel) + ".json";
+
+    json layout;
+    layout["name"] = "Edited Level " + std::to_string(currentLevel);
+    layout["bricks"] = json::array();
+    for (const auto& brick : bricks) {
+        if (!brick.IsActive()) continue;
+        Rectangle r = brick.GetRect();
+        layout["bricks"].push_back({
+            {"x", r.x}, {"y", r.y}, {"width", r.width}, {"height", r.height},
+            {"color", ColorToName(brick.GetColor())},
+            {"type", BrickTypeToName(brick.GetType())}
+        });
+    }
+
+    std::ofstream out(path);
+    if (!out.is_open()) return false;
+    out << layout.dump(4);
+    return true;
+}
+
+void Game::HandleEditMode() {
+    if (IsKeyPressed(KEY_ONE)) editBrushType = NORMAL;
+    if (IsKeyPressed(KEY_TWO)) editBrushType = EXPLOSIVE;
+    if (IsKeyPressed(KEY_THREE)) editBrushType = GOLDEN;
+
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        Vector2 mouse = GetMousePosition();
+        auto hit = std::find_if(bricks.begin(), bricks.end(), [mouse](const Brick& brick) {
+            return brick.IsActive() && CheckCollisionPointRec(mouse, brick.GetRect());
+        });
+
+        if (hit != bricks.end()) {
+            bricks.erase(hit);
+        } else if (mouse.y > 60 && mouse.y < 520) {
+            float width = 85;
+            float height = 25;
+            float x = std::max(5.0f, std::min(710.0f, std::floor((mouse.x - 50) / 95.0f) * 95.0f + 50));
+            float y = std::max(70.0f, std::min(500.0f, std::floor((mouse.y - 80) / 35.0f) * 35.0f + 80));
+            Color color = editBrushType == GOLDEN ? GOLD : (editBrushType == EXPLOSIVE ? RED : SKYBLUE);
+            bricks.emplace_back(x, y, width, height, color, editBrushType);
+        }
+        RecalculateWinCount();
+    }
+
+    if (IsKeyPressed(KEY_S)) {
+        statusMessage = SaveCurrentLayout() ? "当前布局已保存为 JSON。" : "保存布局失败。";
+    }
+
+    if (IsKeyPressed(KEY_E)) {
+        SaveCurrentLayout();
+        currentState = GameState::PLAYING;
+        statusMessage = "已退出编辑模式。";
+    }
+}
+
+void Game::Init() {
+    LoadConfig();
+    score = 0;
+    lives = 3;
+    currentLevel = 1;
+    gameTime = 0.0f;
+    scoreSaved = false;
+    loadedFromSave = false;
+    saveAvailable = SaveExists();
+    currentState = GameState::MENU;
+    ResetTransientObjects();
+    ResetBallAndPaddle();
 
     if (!networkSession.IsActive()) {
         networkRole = NetworkRole::OFFLINE;
@@ -47,17 +369,14 @@ void Game::Init() {
             25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
             21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
             20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475
+            24314, 22833, 31561, 25490, 21475, 32487, 23384, 26723, 20851, 21345,
+            24320, 22987, 32534, 36753, 20445, 23384, 35835, 26723, 20851
         };
 
         std::vector<int> codepoints;
         codepoints.reserve(95 + (sizeof(chineseCodepoints) / sizeof(chineseCodepoints[0])));
-        for (int c = 32; c <= 126; ++c) {
-            codepoints.push_back(c); // ASCII for H/J/L/A/D and symbols
-        }
-        for (int c : chineseCodepoints) {
-            codepoints.push_back(c);
-        }
+        for (int c = 32; c <= 126; ++c) codepoints.push_back(c);
+        for (int c : chineseCodepoints) codepoints.push_back(c);
 
         const char* fontCandidates[] = {
             "fonts/NotoSansSC.otf",
@@ -75,30 +394,7 @@ void Game::Init() {
         }
     }
 
-    bricks.clear();
-
-    Color colors[] = {RED, ORANGE, YELLOW, GREEN, BLUE};
-
-    for (int row = 0; row < 5; row++) {
-        for (int col = 0; col < 8; col++) {
-            int randType = rand() % 10;
-
-            BrickType type = NORMAL;
-            if (randType == 0) type = EXPLOSIVE;
-            else if (randType == 1) type = GOLDEN;
-
-            bricks.emplace_back(
-                50 + col * 95,
-                80 + row * 35,
-                85,
-                25,
-                colors[row],
-                type
-            );
-        }
-    }
-
-    winCount = bricks.size();
+    LoadLevel(currentLevel);
 }
 
 void Game::AddBall(const Ball& newBall) {
@@ -110,19 +406,30 @@ void Game::AddParticles(const std::vector<Particle>& newParticles) {
 }
 
 void Game::Update() {
-    if (IsKeyPressed(KEY_L)) {
+    if (currentState != GameState::EDITING && IsKeyPressed(KEY_L)) {
         currentState = GameState::LEADERBOARD;
     }
 
     switch (currentState) {
     case GameState::LEADERBOARD:
-        if (IsKeyPressed(KEY_L)) {
-            currentState = GameState::MENU;
-        }
+        if (IsKeyPressed(KEY_L)) currentState = GameState::MENU;
         break;
 
     case GameState::MENU:
-        if (IsKeyPressed(KEY_SPACE)) {
+        if (saveAvailable && IsKeyPressed(KEY_C)) {
+            if (LoadSaveGame()) currentState = GameState::PLAYING;
+            saveAvailable = SaveExists();
+        }
+        if (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_N)) {
+            DeleteSave();
+            saveAvailable = false;
+            score = 0;
+            lives = 3;
+            currentLevel = 1;
+            scoreSaved = false;
+            ResetTransientObjects();
+            ResetBallAndPaddle();
+            LoadLevel(currentLevel);
             networkSession.Shutdown();
             networkRole = NetworkRole::OFFLINE;
             networkHint = "单机模式";
@@ -152,10 +459,23 @@ void Game::Update() {
         }
         break;
 
+    case GameState::EDITING:
+        HandleEditMode();
+        break;
+
     case GameState::PLAYING: {
         if (IsKeyPressed(KEY_P)) {
             currentState = GameState::PAUSED;
             break;
+        }
+        if (IsKeyPressed(KEY_E)) {
+            currentState = GameState::EDITING;
+            statusMessage = "编辑模式：左键添加/删除，1普通 2爆炸 3金砖，S保存，E退出。";
+            break;
+        }
+        if (IsKeyPressed(KEY_F5)) {
+            statusMessage = SaveGame() ? "存档成功。" : "存档失败。";
+            saveAvailable = SaveExists();
         }
 
         float dt = GetFrameTime();
@@ -166,9 +486,7 @@ void Game::Update() {
             networkSession.SendInput(sendLeft, sendRight);
 
             std::string statePayload;
-            if (networkSession.ReceiveState(statePayload)) {
-                ApplyNetworkState(statePayload);
-            }
+            if (networkSession.ReceiveState(statePayload)) ApplyNetworkState(statePayload);
             break;
         }
 
@@ -178,15 +496,11 @@ void Game::Update() {
             if (networkSession.ReceiveInput(netLeft, netRight)) {
                 remoteMoveLeft = netLeft;
                 remoteMoveRight = netRight;
-                if (networkSession.HasPeer()) {
-                    networkHint = "局域网房主: 已连接 1 位客户端";
-                }
+                if (networkSession.HasPeer()) networkHint = "局域网房主: 已连接 1 位客户端";
             }
         }
 
-        if (!balls.empty() && balls[0].IsLaunched()) {
-            gameTime += dt;
-        }
+        if (!balls.empty() && balls[0].IsLaunched()) gameTime += dt;
 
         paddle.Update(dt);
         bool localLeft = IsKeyDown(KEY_LEFT);
@@ -199,10 +513,7 @@ void Game::Update() {
 
         for (auto& b : balls) {
             if (!b.IsLaunched()) {
-                b.ResetToPaddle(
-                    paddle.GetRect().x + paddle.GetRect().width / 2,
-                    paddle.GetRect().y
-                );
+                b.ResetToPaddle(paddle.GetRect().x + paddle.GetRect().width / 2, paddle.GetRect().y);
                 break;
             }
         }
@@ -210,10 +521,7 @@ void Game::Update() {
         if (IsKeyPressed(KEY_SPACE)) {
             for (auto& b : balls) {
                 if (!b.IsLaunched()) {
-                    b.Launch(
-                        paddle.GetRect().x + paddle.GetRect().width / 2,
-                        paddle.GetRect().width
-                    );
+                    b.Launch(paddle.GetRect().x + paddle.GetRect().width / 2, paddle.GetRect().width);
                     break;
                 }
             }
@@ -223,46 +531,31 @@ void Game::Update() {
             if (b.IsLaunched()) {
                 b.ApplyGravity();
                 b.Move();
-                b.BounceEdge(800, 600);
+                b.BounceEdge(kScreenWidth, kScreenHeight);
                 b.BouncePaddle(paddle.GetRect());
             }
         }
 
+        for (auto& pu : powerUps) pu.Update(dt);
         for (auto& pu : powerUps) {
-            pu.Update(dt);
+            if (pu.active && pu.CheckCollision(paddle.GetRect())) pu.ApplyEffect(*this);
         }
+        powerUps.erase(std::remove_if(powerUps.begin(), powerUps.end(),
+                                      [](const PowerUp& pu) { return !pu.active || pu.position.y > 650; }),
+                       powerUps.end());
 
-        for (auto& pu : powerUps) {
-            if (pu.active && pu.CheckCollision(paddle.GetRect())) {
-                pu.ApplyEffect(*this);
-            }
-        }
-
-        powerUps.erase(
-            std::remove_if(powerUps.begin(), powerUps.end(),
-                           [](const PowerUp& pu) { return !pu.active || pu.position.y > 650; }),
-            powerUps.end()
-        );
-
-        for (auto& effect : activeEffects) {
-            effect->Update(*this, dt);
-        }
-
-        activeEffects.erase(
-            std::remove_if(activeEffects.begin(), activeEffects.end(),
-                           [](const std::unique_ptr<PowerUpEffect>& e) { return e->IsExpired(); }),
-            activeEffects.end()
-        );
+        for (auto& effect : activeEffects) effect->Update(*this, dt);
+        activeEffects.erase(std::remove_if(activeEffects.begin(), activeEffects.end(),
+                                           [](const std::unique_ptr<PowerUpEffect>& e) { return e->IsExpired(); }),
+                            activeEffects.end());
 
         std::vector<bool> brickProcessed(bricks.size(), false);
-
         for (size_t i = 0; i < bricks.size(); ++i) {
             auto& brick = bricks[i];
             if (!brick.IsActive() || brickProcessed[i]) continue;
 
             for (auto& b : balls) {
                 if (!b.IsLaunched()) continue;
-
                 if (b.CheckBrickCollision(brick.GetRect())) {
                     BrickType type = brick.GetType();
                     Rectangle hit = brick.GetRect();
@@ -275,31 +568,27 @@ void Game::Update() {
                         switch(puType) {
                             case PowerUpType::PADDLE_EXTEND:
                                 effect = std::make_unique<ExtendPaddleEffect>(
-                                    config["powerups"]["paddle_extend"]["extra_width"],
-                                    config["powerups"]["paddle_extend"]["duration"]);
+                                    config["powerups"]["paddle_extend"].value("extra_width", 40.0f),
+                                    config["powerups"]["paddle_extend"].value("duration", 5.0f));
                                 break;
                             case PowerUpType::MULTI_BALL:
                                 effect = std::make_unique<MultiBallEffect>(
-                                    config["powerups"]["multi_ball"]["extra_balls"]);
+                                    config["powerups"]["multi_ball"].value("extra_balls", 2));
                                 break;
                             case PowerUpType::SLOW_BALL:
                                 effect = std::make_unique<SlowBallEffect>(
-                                    config["powerups"]["slow_ball"]["speed_factor"],
-                                    config["powerups"]["slow_ball"]["duration"]);
+                                    config["powerups"]["slow_ball"].value("speed_factor", 0.7f),
+                                    config["powerups"]["slow_ball"].value("duration", 5.0f));
                                 break;
                         }
-                        powerUps.emplace_back(
-                            Vector2{brick.GetRect().x + brick.GetRect().width/2, brick.GetRect().y},
-                            puType,
-                            std::move(effect)
-                        );
+                        powerUps.emplace_back(Vector2{brick.GetRect().x + brick.GetRect().width/2, brick.GetRect().y},
+                                             puType, std::move(effect));
                     }
                     GenerateBrickParticles(hit, brickColor);
 
                     if (type == GOLDEN) score += 50;
                     else score += 10;
                     winCount--;
-
                     brickProcessed[i] = true;
 
                     if (type == EXPLOSIVE) {
@@ -322,38 +611,30 @@ void Game::Update() {
         }
 
         for (auto it = balls.begin(); it != balls.end(); ) {
-            if (it->GetPosition().y > 650) {
-                it = balls.erase(it);
-            } else {
-                ++it;
-            }
+            if (it->GetPosition().y > 650) it = balls.erase(it);
+            else ++it;
         }
 
         if (balls.empty()) {
             lives--;
+            SaveGame();
             if (lives <= 0) {
                 currentState = GameState::GAMEOVER;
+                DeleteSave();
             } else {
-                Ball newBall({400, 530}, {0, 0}, 10);
-                balls.push_back(newBall);
+                balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
             }
         }
 
-        if (winCount <= 0) {
-            currentState = GameState::VICTORY;
-        }
+        if (winCount <= 0) LoadNextLevelOrWin();
 
-        if (networkRole == NetworkRole::HOST && networkSession.IsActive()) {
-            networkSession.SendState(BuildNetworkState());
-        }
-
+        if (networkRole == NetworkRole::HOST && networkSession.IsActive()) networkSession.SendState(BuildNetworkState());
         break;
     }
 
     case GameState::PAUSED:
-        if (IsKeyPressed(KEY_P)) {
-            currentState = GameState::PLAYING;
-        }
+        if (IsKeyPressed(KEY_P)) currentState = GameState::PLAYING;
+        if (IsKeyPressed(KEY_F5)) statusMessage = SaveGame() ? "存档成功。" : "存档失败。";
         break;
 
     case GameState::GAMEOVER:
@@ -361,7 +642,6 @@ void Game::Update() {
             leaderboard.AddScore("Player", score);
             scoreSaved = true;
         }
-
         if (IsKeyPressed(KEY_R)) {
             Init();
             currentState = GameState::PLAYING;
@@ -384,21 +664,14 @@ void Game::Update() {
     }
 
     float dt = GetFrameTime();
-    for (auto& p : particles) {
-        p.Update(dt);
-    }
-    particles.erase(
-        std::remove_if(particles.begin(), particles.end(),
-                       [](const Particle& p) { return !p.IsAlive(); }),
-        particles.end()
-    );
+    for (auto& p : particles) p.Update(dt);
+    particles.erase(std::remove_if(particles.begin(), particles.end(),
+                                   [](const Particle& p) { return !p.IsAlive(); }),
+                    particles.end());
 }
 
-
 void Game::Shutdown() {
-    if (hasChineseFont && uiFont.texture.id > 0) {
-        UnloadFont(uiFont);
-    }
+    if (hasChineseFont && uiFont.texture.id > 0) UnloadFont(uiFont);
     hasChineseFont = false;
 }
 
@@ -409,23 +682,23 @@ void Game::Draw() {
     switch (currentState) {
     case GameState::MENU:
         if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 200}, 44, 1, WHITE);
-            DrawTextEx(uiFont, "按 空格 键开始单机游戏", Vector2{190, 285}, 28, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 325}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 365}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "房主: 方向键+空格  客户端: A/D", Vector2{145, 405}, 24, 1, LIGHTGRAY);
-            DrawTextEx(uiFont, "按 L 键查看排行榜", Vector2{230, 445}, 28, 1, YELLOW);
+            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 165}, 44, 1, WHITE);
+            DrawTextEx(uiFont, saveAvailable ? "发现存档：按 C 继续，按 N/空格 开新游戏" : "按 空格 键开始单机游戏", Vector2{120, 250}, 25, 1, GREEN);
+            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 310}, 28, 1, SKYBLUE);
+            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 350}, 28, 1, SKYBLUE);
+            DrawTextEx(uiFont, "游戏中：F5存档  E编辑模式  L排行榜", Vector2{135, 390}, 24, 1, YELLOW);
         } else {
-            DrawText("BREAKOUT GAME", 260, 200, 30, WHITE);
-            DrawText("Press SPACE to Start (Offline)", 210, 290, 20, GREEN);
-            DrawText("Press H to Host LAN", 260, 330, 20, SKYBLUE);
-            DrawText("Press J to Join LAN (127.0.0.1)", 180, 360, 20, SKYBLUE);
-            DrawText("Host: arrows + SPACE; Client: A/D", 190, 390, 18, LIGHTGRAY);
-            DrawText("Press L for Leaderboard", 230, 430, 20, YELLOW);
+            DrawText("BREAKOUT GAME", 260, 165, 30, WHITE);
+            DrawText(saveAvailable ? "Save found: C Continue, N/SPACE New Game" : "Press SPACE to Start (Offline)", 125, 250, 20, GREEN);
+            DrawText("Press H to Host LAN", 260, 310, 20, SKYBLUE);
+            DrawText("Press J to Join LAN (127.0.0.1)", 180, 350, 20, SKYBLUE);
+            DrawText("In game: F5 Save, E Edit Mode, L Leaderboard", 135, 390, 18, YELLOW);
         }
+        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 550, 16, ORANGE);
         break;
 
     case GameState::PLAYING:
+    case GameState::EDITING:
         for (auto& brick : bricks) brick.Draw();
         paddle.Draw();
         for (auto& b : balls) b.Draw();
@@ -434,11 +707,16 @@ void Game::Draw() {
 
         DrawText(TextFormat("Score: %d", score), 20, 20, 20, WHITE);
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
-        if (hasChineseFont) {
-            DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
-        } else {
-            DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+        DrawText(TextFormat("Level: %d/%d", currentLevel, static_cast<int>(levelFiles.size())), 350, 20, 20, WHITE);
+        if (hasChineseFont) DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
+        else DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+        DrawText("F5 Save | E Edit", 590, 50, 16, LIGHTGRAY);
+        if (currentState == GameState::EDITING) {
+            DrawRectangle(0, 0, kScreenWidth, 70, Fade(DARKBLUE, 0.85f));
+            DrawText("EDIT MODE: Left click add/delete | 1 Normal 2 Explosive 3 Golden | S Save JSON | E Exit", 20, 20, 18, WHITE);
+            DrawText(TextFormat("Brush: %s", BrickTypeToName(editBrushType).c_str()), 20, 45, 18, YELLOW);
         }
+        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 575, 16, ORANGE);
         break;
 
     case GameState::PAUSED:
@@ -447,8 +725,9 @@ void Game::Draw() {
         for (auto& b : balls) b.Draw();
         for (auto& p : particles) p.Draw();
         for (auto& pu : powerUps) pu.Draw();
-
-        DrawText("PAUSED", 350, 300, 30, YELLOW);
+        DrawText("PAUSED", 350, 285, 30, YELLOW);
+        DrawText("P Resume | F5 Save", 300, 330, 20, WHITE);
+        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 575, 16, ORANGE);
         break;
 
     case GameState::GAMEOVER:
@@ -457,26 +736,18 @@ void Game::Draw() {
         break;
 
     case GameState::VICTORY:
-        DrawText("YOU WIN!", 300, 250, 30, GREEN);
+        DrawText("YOU WIN ALL LEVELS!", 240, 250, 30, GREEN);
         DrawText("Press R to Restart", 260, 320, 20, WHITE);
         break;
 
     case GameState::LEADERBOARD:
         DrawText("LEADERBOARD", 300, 80, 30, GOLD);
-
         for (int i = 0; i < leaderboard.GetCount(); i++) {
             ScoreEntry entry;
             if (leaderboard.GetEntry(i + 1, entry)) {
-                DrawText(
-                    TextFormat("%d. %s - %d", i + 1, entry.name, entry.score),
-                    250,
-                    150 + i * 30,
-                    20,
-                    WHITE
-                );
+                DrawText(TextFormat("%d. %s - %d", i + 1, entry.name, entry.score), 250, 150 + i * 30, 20, WHITE);
             }
         }
-
         DrawText("Press L to return", 270, 500, 20, GRAY);
         break;
     }
@@ -512,15 +783,14 @@ std::string Game::BuildNetworkState() const {
 
     std::string brickMask;
     brickMask.reserve(bricks.size());
-    for (const auto& brick : bricks) {
-        brickMask.push_back(brick.IsActive() ? '1' : '0');
-    }
+    for (const auto& brick : bricks) brickMask.push_back(brick.IsActive() ? '1' : '0');
 
     std::ostringstream oss;
     oss << static_cast<int>(currentState) << '|'
         << score << '|'
         << lives << '|'
         << winCount << '|'
+        << currentLevel << '|'
         << paddleX << '|'
         << ballPos.x << '|'
         << ballPos.y << '|'
@@ -535,29 +805,25 @@ void Game::ApplyNetworkState(const std::string& state) {
     std::stringstream ss(state);
     std::string token;
     std::vector<std::string> fields;
-    while (std::getline(ss, token, '|')) {
-        fields.push_back(token);
-    }
+    while (std::getline(ss, token, '|')) fields.push_back(token);
 
-    if (fields.size() < 11) return;
+    if (fields.size() < 12) return;
 
     currentState = static_cast<GameState>(std::stoi(fields[0]));
     score = std::stoi(fields[1]);
     lives = std::stoi(fields[2]);
     winCount = std::stoi(fields[3]);
+    int incomingLevel = std::stoi(fields[4]);
+    if (incomingLevel != currentLevel) LoadLevel(incomingLevel);
 
-    paddle.SetX(std::stof(fields[4]));
+    paddle.SetX(std::stof(fields[5]));
 
-    if (balls.empty()) {
-        balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
-    }
-    balls[0].Reset(Vector2{std::stof(fields[5]), std::stof(fields[6])},
-                   Vector2{std::stof(fields[7]), std::stof(fields[8])});
-    balls[0].SetLaunched(std::stoi(fields[9]) != 0);
+    if (balls.empty()) balls.emplace_back(Vector2{400, 530}, Vector2{0, 0}, 10);
+    balls[0].Reset(Vector2{std::stof(fields[6]), std::stof(fields[7])},
+                   Vector2{std::stof(fields[8]), std::stof(fields[9])});
+    balls[0].SetLaunched(std::stoi(fields[10]) != 0);
 
-    const std::string& brickMask = fields[10];
+    const std::string& brickMask = fields[11];
     size_t n = std::min(bricks.size(), brickMask.size());
-    for (size_t i = 0; i < n; ++i) {
-        bricks[i].SetActive(brickMask[i] == '1');
-    }
+    for (size_t i = 0; i < n; ++i) bricks[i].SetActive(brickMask[i] == '1');
 }
