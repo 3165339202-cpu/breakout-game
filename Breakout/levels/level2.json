@@ -1,0 +1,221 @@
+{
+    "name": "Checker Blast",
+    "bricks": [
+        {
+            "x": 145,
+            "y": 75,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 75,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 75,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 75,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "explosive"
+        },
+        {
+            "x": 715,
+            "y": 75,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 50,
+            "y": 110,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 110,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 110,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 110,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "explosive"
+        },
+        {
+            "x": 620,
+            "y": 110,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 110,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 50,
+            "y": 145,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 145,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 145,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "explosive"
+        },
+        {
+            "x": 525,
+            "y": 145,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 145,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 180,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 180,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "explosive"
+        },
+        {
+            "x": 430,
+            "y": 180,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 180,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 180,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "explosive"
+        },
+        {
+            "x": 50,
+            "y": 215,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "normal"
+        },
+        {
+            "x": 145,
+            "y": 215,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "explosive"
+        },
+        {
+            "x": 335,
+            "y": 215,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 215,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 215,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "explosive"
+        },
+        {
+            "x": 715,
+            "y": 215,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "normal"
+        }
+    ]
+}

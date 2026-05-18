@@ -22,7 +22,8 @@ enum class GameState {
     PAUSED,
     GAMEOVER,
     VICTORY,
-    LEADERBOARD
+    LEADERBOARD,
+    EDITING
 };
 
 enum class NetworkRole {
@@ -41,6 +42,7 @@ private:
 
     int score;
     int lives;
+    int currentLevel;
     int winCount;
     bool scoreSaved;
 
@@ -63,8 +65,32 @@ private:
     Font uiFont;
     bool hasChineseFont;
 
+    std::vector<std::string> levelFiles;
+    std::string statusMessage;
+    bool saveAvailable;
+    bool loadedFromSave;
+    BrickType editBrushType;
+
     std::string BuildNetworkState() const;
     void ApplyNetworkState(const std::string& state);
+    void LoadConfig();
+    void ResetTransientObjects();
+    void ResetBallAndPaddle();
+    bool LoadLevel(int levelNumber);
+    bool LoadLevelFromFile(const std::string& path);
+    void LoadDefaultLevel(int levelNumber, const std::string& reason);
+    void RecalculateWinCount();
+    bool SaveGame() const;
+    bool LoadSaveGame();
+    bool SaveExists() const;
+    void DeleteSave() const;
+    void LoadNextLevelOrWin();
+    void HandleEditMode();
+    bool SaveCurrentLayout() const;
+    Color ColorFromName(const std::string& name) const;
+    std::string ColorToName(Color color) const;
+    BrickType BrickTypeFromName(const std::string& name) const;
+    std::string BrickTypeToName(BrickType type) const;
 
 public:
     Game();

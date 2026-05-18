@@ -1,0 +1,221 @@
+{
+    "name": "Treasure Pyramid",
+    "bricks": [
+        {
+            "x": 50,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "gold",
+            "type": "golden"
+        },
+        {
+            "x": 145,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "gold",
+            "type": "golden"
+        },
+        {
+            "x": 525,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 70,
+            "width": 85,
+            "height": 25,
+            "color": "red",
+            "type": "explosive"
+        },
+        {
+            "x": 145,
+            "y": 105,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 105,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 105,
+            "width": 85,
+            "height": 25,
+            "color": "gold",
+            "type": "golden"
+        },
+        {
+            "x": 430,
+            "y": 105,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 105,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "explosive"
+        },
+        {
+            "x": 620,
+            "y": 105,
+            "width": 85,
+            "height": 25,
+            "color": "orange",
+            "type": "normal"
+        },
+        {
+            "x": 240,
+            "y": 140,
+            "width": 85,
+            "height": 25,
+            "color": "gold",
+            "type": "golden"
+        },
+        {
+            "x": 335,
+            "y": 140,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "explosive"
+        },
+        {
+            "x": 430,
+            "y": 140,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 140,
+            "width": 85,
+            "height": 25,
+            "color": "yellow",
+            "type": "normal"
+        },
+        {
+            "x": 335,
+            "y": 175,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 175,
+            "width": 85,
+            "height": 25,
+            "color": "green",
+            "type": "normal"
+        },
+        {
+            "x": 430,
+            "y": 210,
+            "width": 85,
+            "height": 25,
+            "color": "gold",
+            "type": "golden"
+        },
+        {
+            "x": 525,
+            "y": 210,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 210,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "explosive"
+        },
+        {
+            "x": 715,
+            "y": 210,
+            "width": 85,
+            "height": 25,
+            "color": "blue",
+            "type": "normal"
+        },
+        {
+            "x": 525,
+            "y": 245,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "normal"
+        },
+        {
+            "x": 620,
+            "y": 245,
+            "width": 85,
+            "height": 25,
+            "color": "purple",
+            "type": "normal"
+        },
+        {
+            "x": 715,
+            "y": 245,
+            "width": 85,
+            "height": 25,
+            "color": "gold",
+            "type": "golden"
+        }
+    ]
+}
