@@ -27,6 +27,14 @@ bool SameColor(Color a, Color b) {
 void EnsureLevelDirectory() {
     mkdir(kEditedLevelDir, 0755);
 }
+
+void DrawCenteredText(const char* text, int y, float fontSize, float spacing, Color color, Font* font = nullptr) {
+    float width = font ? MeasureTextEx(*font, text, fontSize, spacing).x
+                       : static_cast<float>(MeasureText(text, static_cast<int>(fontSize)));
+    float x = (kScreenWidth - width) * 0.5f;
+    if (font) DrawTextEx(*font, text, Vector2{x, static_cast<float>(y)}, fontSize, spacing, color);
+    else DrawText(text, static_cast<int>(x), y, static_cast<int>(fontSize), color);
+}
 }
 
 Game::Game()
@@ -365,18 +373,15 @@ void Game::Init() {
     remoteMoveRight = false;
 
     if (!hasChineseFont) {
-        const int chineseCodepoints[] = {
-            25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
-            21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475, 32487, 23384, 26723, 20851, 21345,
-            24320, 22987, 32534, 36753, 20445, 23384, 35835, 26723, 20851
-        };
-
         std::vector<int> codepoints;
-        codepoints.reserve(95 + (sizeof(chineseCodepoints) / sizeof(chineseCodepoints[0])));
+        // ASCII
         for (int c = 32; c <= 126; ++c) codepoints.push_back(c);
-        for (int c : chineseCodepoints) codepoints.push_back(c);
+        // CJK Symbols and Punctuation
+        for (int c = 0x3000; c <= 0x303F; ++c) codepoints.push_back(c);
+        // Full-width forms and common symbol variants
+        for (int c = 0xFF00; c <= 0xFFEF; ++c) codepoints.push_back(c);
+        // CJK Unified Ideographs (常用汉字主区)
+        for (int c = 0x4E00; c <= 0x9FFF; ++c) codepoints.push_back(c);
 
         const char* fontCandidates[] = {
             "fonts/NotoSansSC.otf",
@@ -406,16 +411,16 @@ void Game::AddParticles(const std::vector<Particle>& newParticles) {
 }
 
 void Game::Update() {
-    if (currentState != GameState::EDITING && IsKeyPressed(KEY_L)) {
-        currentState = GameState::LEADERBOARD;
-    }
-
     switch (currentState) {
     case GameState::LEADERBOARD:
-        if (IsKeyPressed(KEY_L)) currentState = GameState::MENU;
+        if (IsKeyPressed(KEY_L) || IsKeyPressed(KEY_ESCAPE)) currentState = GameState::MENU;
         break;
 
     case GameState::MENU:
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (saveAvailable && IsKeyPressed(KEY_C)) {
             if (LoadSaveGame()) currentState = GameState::PLAYING;
             saveAvailable = SaveExists();
@@ -464,6 +469,10 @@ void Game::Update() {
         break;
 
     case GameState::PLAYING: {
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (IsKeyPressed(KEY_P)) {
             currentState = GameState::PAUSED;
             break;
@@ -633,11 +642,16 @@ void Game::Update() {
     }
 
     case GameState::PAUSED:
+        if (IsKeyPressed(KEY_L)) currentState = GameState::LEADERBOARD;
         if (IsKeyPressed(KEY_P)) currentState = GameState::PLAYING;
         if (IsKeyPressed(KEY_F5)) statusMessage = SaveGame() ? "存档成功。" : "存档失败。";
         break;
 
     case GameState::GAMEOVER:
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (!scoreSaved) {
             leaderboard.AddScore("Player", score);
             scoreSaved = true;
@@ -649,6 +663,10 @@ void Game::Update() {
         break;
 
     case GameState::VICTORY:
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (!scoreSaved) {
             leaderboard.AddScore("Player", score);
             scoreSaved = true;
@@ -682,19 +700,22 @@ void Game::Draw() {
     switch (currentState) {
     case GameState::MENU:
         if (hasChineseFont) {
-            DrawTextEx(uiFont, "打砖块游戏", Vector2{280, 165}, 44, 1, WHITE);
-            DrawTextEx(uiFont, saveAvailable ? "发现存档：按 C 继续，按 N/空格 开新游戏" : "按 空格 键开始单机游戏", Vector2{120, 250}, 25, 1, GREEN);
-            DrawTextEx(uiFont, "按 H 键创建局域网房间", Vector2{185, 310}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "按 J 键加入 127.0.0.1 房间", Vector2{165, 350}, 28, 1, SKYBLUE);
-            DrawTextEx(uiFont, "游戏中：F5存档  E编辑模式  L排行榜", Vector2{135, 390}, 24, 1, YELLOW);
+            DrawCenteredText("打砖块游戏", 165, 44, 1, WHITE, &uiFont);
+            DrawCenteredText(saveAvailable ? "发现存档：按 C 继续，按 N/空格 开新游戏" : "按 空格 键开始单机游戏", 250, 25, 1, GREEN, &uiFont);
+            DrawCenteredText("按 H 键创建局域网房间", 310, 28, 1, SKYBLUE, &uiFont);
+            DrawCenteredText("按 J 键加入 127.0.0.1 房间", 350, 28, 1, SKYBLUE, &uiFont);
+            DrawCenteredText("游戏中：F5存档  E编辑模式  L排行榜", 390, 24, 1, YELLOW, &uiFont);
         } else {
-            DrawText("BREAKOUT GAME", 260, 165, 30, WHITE);
-            DrawText(saveAvailable ? "Save found: C Continue, N/SPACE New Game" : "Press SPACE to Start (Offline)", 125, 250, 20, GREEN);
-            DrawText("Press H to Host LAN", 260, 310, 20, SKYBLUE);
-            DrawText("Press J to Join LAN (127.0.0.1)", 180, 350, 20, SKYBLUE);
-            DrawText("In game: F5 Save, E Edit Mode, L Leaderboard", 135, 390, 18, YELLOW);
+            DrawCenteredText("BREAKOUT GAME", 165, 30, 1, WHITE);
+            DrawCenteredText(saveAvailable ? "Save found: C Continue, N/SPACE New Game" : "Press SPACE to Start (Offline)", 250, 20, 1, GREEN);
+            DrawCenteredText("Press H to Host LAN", 310, 20, 1, SKYBLUE);
+            DrawCenteredText("Press J to Join LAN (127.0.0.1)", 350, 20, 1, SKYBLUE);
+            DrawCenteredText("In game: F5 Save, E Edit Mode, L Leaderboard", 390, 18, 1, YELLOW);
         }
-        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 550, 16, ORANGE);
+        if (!statusMessage.empty()) {
+            if (hasChineseFont) DrawTextEx(uiFont, statusMessage.c_str(), Vector2{20, 550}, 16, 1, ORANGE);
+            else DrawText("Status updated", 20, 550, 16, ORANGE);
+        }
         break;
 
     case GameState::PLAYING:
@@ -709,14 +730,24 @@ void Game::Draw() {
         DrawText(TextFormat("Lives: %d", lives), 700, 20, 20, WHITE);
         DrawText(TextFormat("Level: %d/%d", currentLevel, static_cast<int>(levelFiles.size())), 350, 20, 20, WHITE);
         if (hasChineseFont) DrawTextEx(uiFont, networkHint.c_str(), Vector2{20, 50}, 22, 1, SKYBLUE);
-        else DrawText(networkHint.c_str(), 20, 50, 18, SKYBLUE);
+        else DrawText("Offline mode", 20, 50, 18, SKYBLUE);
         DrawText("F5 Save | E Edit", 590, 50, 16, LIGHTGRAY);
         if (currentState == GameState::EDITING) {
             DrawRectangle(0, 0, kScreenWidth, 70, Fade(DARKBLUE, 0.85f));
-            DrawText("EDIT MODE: Left click add/delete | 1 Normal 2 Explosive 3 Golden | S Save JSON | E Exit", 20, 20, 18, WHITE);
-            DrawText(TextFormat("Brush: %s", BrickTypeToName(editBrushType).c_str()), 20, 45, 18, YELLOW);
+            if (hasChineseFont) {
+                DrawTextEx(uiFont, "编辑模式：左键添加/删除｜1 普通 2 爆炸 3 金砖｜S 保存 JSON｜E 退出",
+                           Vector2{20, 20}, 24, 1, WHITE);
+                DrawTextEx(uiFont, TextFormat("画笔：%s", BrickTypeToName(editBrushType).c_str()),
+                           Vector2{20, 45}, 24, 1, YELLOW);
+            } else {
+                DrawText("EDIT MODE: Left click add/delete | 1 Normal 2 Explosive 3 Golden | S Save JSON | E Exit", 20, 20, 18, WHITE);
+                DrawText(TextFormat("Brush: %s", BrickTypeToName(editBrushType).c_str()), 20, 45, 18, YELLOW);
+            }
         }
-        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 575, 16, ORANGE);
+        if (!statusMessage.empty()) {
+            if (hasChineseFont) DrawTextEx(uiFont, statusMessage.c_str(), Vector2{20, 575}, 16, 1, ORANGE);
+            else DrawText("Status updated", 20, 575, 16, ORANGE);
+        }
         break;
 
     case GameState::PAUSED:
@@ -727,7 +758,10 @@ void Game::Draw() {
         for (auto& pu : powerUps) pu.Draw();
         DrawText("PAUSED", 350, 285, 30, YELLOW);
         DrawText("P Resume | F5 Save", 300, 330, 20, WHITE);
-        if (!statusMessage.empty()) DrawText(statusMessage.c_str(), 20, 575, 16, ORANGE);
+        if (!statusMessage.empty()) {
+            if (hasChineseFont) DrawTextEx(uiFont, statusMessage.c_str(), Vector2{20, 575}, 16, 1, ORANGE);
+            else DrawText("Status updated", 20, 575, 16, ORANGE);
+        }
         break;
 
     case GameState::GAMEOVER:
@@ -741,14 +775,14 @@ void Game::Draw() {
         break;
 
     case GameState::LEADERBOARD:
-        DrawText("LEADERBOARD", 300, 80, 30, GOLD);
+        DrawCenteredText("LEADERBOARD", 80, 30, 1, GOLD);
         for (int i = 0; i < leaderboard.GetCount(); i++) {
             ScoreEntry entry;
             if (leaderboard.GetEntry(i + 1, entry)) {
                 DrawText(TextFormat("%d. %s - %d", i + 1, entry.name, entry.score), 250, 150 + i * 30, 20, WHITE);
             }
         }
-        DrawText("Press L to return", 270, 500, 20, GRAY);
+        DrawCenteredText("Press L or ESC to return", 500, 20, 1, GRAY);
         break;
     }
 

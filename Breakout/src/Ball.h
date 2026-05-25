@@ -4,6 +4,20 @@
 #include "raylib.h"
 #include "GameObject.h"
 
+/**
+ * @brief 小球实体，负责移动、重力、碰撞与发射控制。
+ *
+ * 是什么：
+ * - 继承物理对象与可视对象，维护位置、速度、半径以及发射状态。
+ *
+ * 为什么：
+ * - 将“与球相关的规则”封装在单一类中，便于多球模式复用同一逻辑。
+ *
+ * 怎么用：
+ * - 每帧调用 `Move()/ApplyGravity()/Bounce*()` 更新物理；
+ * - 调用 `Draw()` 进行渲染；
+ * - 通过 `Launch/ResetToPaddle/Reset` 控制球的生命周期。
+ */
 class Ball : public PhysicalObject, public VisualObject {
 private:
     float gravity;
