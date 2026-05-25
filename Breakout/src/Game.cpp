@@ -373,29 +373,15 @@ void Game::Init() {
     remoteMoveRight = false;
 
     if (!hasChineseFont) {
-        const int chineseCodepoints[] = {
-            // 常用汉字（菜单/状态/编辑模式）
-            25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
-            21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26524, 30475, 22238,
-            22823, 31561, 32487, 23384, 26723, 20851, 32534, 36753, 20445, 35835,
-            24403, 21069, 24067, 24050, 20445, 20026, 27809, 26377, 25214, 21040,
-            35835, 21462, 35835, 38388, 26159, 36733, 25509, 35201, 21152, 36733,
-            22833, 36133, 37329, 29983, 21629, 32493, 24674, 21457, 29616, 36793,
-            23545, 25151, 38388, 25151, 23458, 25143, 26377, 29616, 25490, 34892,
-            // 标点与全角符号
-            65306, // ：
-            65292, // ，
-            12290, // 。
-            65311, // ？
-            12289, // 、
-            65295  // ／
-        };
-
         std::vector<int> codepoints;
-        codepoints.reserve(95 + (sizeof(chineseCodepoints) / sizeof(chineseCodepoints[0])));
+        // ASCII
         for (int c = 32; c <= 126; ++c) codepoints.push_back(c);
-        for (int c : chineseCodepoints) codepoints.push_back(c);
+        // CJK Symbols and Punctuation
+        for (int c = 0x3000; c <= 0x303F; ++c) codepoints.push_back(c);
+        // Full-width forms and common symbol variants
+        for (int c = 0xFF00; c <= 0xFFEF; ++c) codepoints.push_back(c);
+        // CJK Unified Ideographs (常用汉字主区)
+        for (int c = 0x4E00; c <= 0x9FFF; ++c) codepoints.push_back(c);
 
         const char* fontCandidates[] = {
             "fonts/NotoSansSC.otf",
