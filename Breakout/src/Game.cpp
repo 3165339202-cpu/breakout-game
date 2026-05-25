@@ -374,11 +374,22 @@ void Game::Init() {
 
     if (!hasChineseFont) {
         const int chineseCodepoints[] = {
+            // 常用汉字（菜单/状态/编辑模式）
             25171, 30742, 22359, 28216, 25103, 25353, 31354, 38190, 24320, 22987,
             21333, 26426, 21019, 24314, 23616, 22495, 32593, 25151, 38388, 21152,
-            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26597, 30475, 22238,
-            24314, 22833, 31561, 25490, 21475, 32487, 23384, 26723, 20851, 21345,
-            24320, 22987, 32534, 36753, 20445, 23384, 35835, 26723, 20851
+            20837, 20027, 26041, 21521, 23458, 25490, 34892, 26524, 30475, 22238,
+            22823, 31561, 32487, 23384, 26723, 20851, 32534, 36753, 20445, 35835,
+            24403, 21069, 24067, 24050, 20445, 20026, 27809, 26377, 25214, 21040,
+            35835, 21462, 35835, 38388, 26159, 36733, 25509, 35201, 21152, 36733,
+            22833, 36133, 37329, 29983, 21629, 32493, 24674, 21457, 29616, 36793,
+            23545, 25151, 38388, 25151, 23458, 25143, 26377, 29616, 25490, 34892,
+            // 标点与全角符号
+            65306, // ：
+            65292, // ，
+            12290, // 。
+            65311, // ？
+            12289, // 、
+            65295  // ／
         };
 
         std::vector<int> codepoints;
@@ -737,8 +748,15 @@ void Game::Draw() {
         DrawText("F5 Save | E Edit", 590, 50, 16, LIGHTGRAY);
         if (currentState == GameState::EDITING) {
             DrawRectangle(0, 0, kScreenWidth, 70, Fade(DARKBLUE, 0.85f));
-            DrawText("EDIT MODE: Left click add/delete | 1 Normal 2 Explosive 3 Golden | S Save JSON | E Exit", 20, 20, 18, WHITE);
-            DrawText(TextFormat("Brush: %s", BrickTypeToName(editBrushType).c_str()), 20, 45, 18, YELLOW);
+            if (hasChineseFont) {
+                DrawTextEx(uiFont, "编辑模式：左键添加/删除｜1 普通 2 爆炸 3 金砖｜S 保存 JSON｜E 退出",
+                           Vector2{20, 20}, 24, 1, WHITE);
+                DrawTextEx(uiFont, TextFormat("画笔：%s", BrickTypeToName(editBrushType).c_str()),
+                           Vector2{20, 45}, 24, 1, YELLOW);
+            } else {
+                DrawText("EDIT MODE: Left click add/delete | 1 Normal 2 Explosive 3 Golden | S Save JSON | E Exit", 20, 20, 18, WHITE);
+                DrawText(TextFormat("Brush: %s", BrickTypeToName(editBrushType).c_str()), 20, 45, 18, YELLOW);
+            }
         }
         if (!statusMessage.empty()) {
             if (hasChineseFont) DrawTextEx(uiFont, statusMessage.c_str(), Vector2{20, 575}, 16, 1, ORANGE);
