@@ -406,16 +406,16 @@ void Game::AddParticles(const std::vector<Particle>& newParticles) {
 }
 
 void Game::Update() {
-    if (currentState != GameState::EDITING && IsKeyPressed(KEY_L)) {
-        currentState = GameState::LEADERBOARD;
-    }
-
     switch (currentState) {
     case GameState::LEADERBOARD:
-        if (IsKeyPressed(KEY_L)) currentState = GameState::MENU;
+        if (IsKeyPressed(KEY_L) || IsKeyPressed(KEY_ESCAPE)) currentState = GameState::MENU;
         break;
 
     case GameState::MENU:
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (saveAvailable && IsKeyPressed(KEY_C)) {
             if (LoadSaveGame()) currentState = GameState::PLAYING;
             saveAvailable = SaveExists();
@@ -464,6 +464,10 @@ void Game::Update() {
         break;
 
     case GameState::PLAYING: {
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (IsKeyPressed(KEY_P)) {
             currentState = GameState::PAUSED;
             break;
@@ -633,11 +637,16 @@ void Game::Update() {
     }
 
     case GameState::PAUSED:
+        if (IsKeyPressed(KEY_L)) currentState = GameState::LEADERBOARD;
         if (IsKeyPressed(KEY_P)) currentState = GameState::PLAYING;
         if (IsKeyPressed(KEY_F5)) statusMessage = SaveGame() ? "存档成功。" : "存档失败。";
         break;
 
     case GameState::GAMEOVER:
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (!scoreSaved) {
             leaderboard.AddScore("Player", score);
             scoreSaved = true;
@@ -649,6 +658,10 @@ void Game::Update() {
         break;
 
     case GameState::VICTORY:
+        if (IsKeyPressed(KEY_L)) {
+            currentState = GameState::LEADERBOARD;
+            break;
+        }
         if (!scoreSaved) {
             leaderboard.AddScore("Player", score);
             scoreSaved = true;
