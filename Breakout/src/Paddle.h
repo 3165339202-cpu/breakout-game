@@ -21,9 +21,12 @@ public:
     void Extend(float extraWidth, float duration);
     void Update(float dt); 
 
-    Rectangle GetRect() {
+    Rectangle GetRect() const {
         return { position.x, position.y, width, height };
     }
+
+    void SetX(float x) { position.x = x; }
+    float GetX() const { return position.x; }
 };
 
 #endif

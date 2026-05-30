@@ -17,6 +17,7 @@ add_executable(breakout_week2
     src/SlowBallEffect.cpp
     src/PowerUpFactory.cpp  
     src/PowerUp.cpp
+    src/NetworkSession.cpp
 )
 
 target_link_libraries(breakout_week2 raylib m pthread dl rt X11)
